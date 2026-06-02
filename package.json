@@ -1,0 +1,17 @@
+{
+  "name": "meridian-briefing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone CMS-style editor/publisher for the Optum NY/NJ Provider Briefing. Node server over a single JSON file; admin-gated edit + publish; read-only provider landing. Zero runtime dependencies.",
+  "scripts": {
+    "dev": "node --env-file=.env server.js",
+    "start": "node server.js",
+    "seed": "node scripts/seed.mjs",
+    "hash-password": "node scripts/hash-password.mjs",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=20.6"
+  }
+}
