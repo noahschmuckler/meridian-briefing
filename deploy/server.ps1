@@ -298,6 +298,13 @@ function Write-State($state) {
   } else {
     [System.IO.File]::Move($tmp, $path)
   }
+  # TEMP: verify the write actually stuck by re-reading the file immediately.
+  $vIds = '<unread>'
+  try {
+    $vTxt = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+    $vIds = (@(To-Array (Get-Prop ($vTxt | ConvertFrom-Json) 'editions')) | ForEach-Object { Get-Prop $_ 'id' }) -join ','
+  } catch { $vIds = "<reread-failed: $($_.Exception.Message)>" }
+  Log-Debug ("WRITE path={0} exists={1} wroteIds=[{2}] reReadIds=[{3}]" -f $path, (Test-Path -LiteralPath $path), ((@(To-Array (Get-Prop $next 'editions')) | ForEach-Object { Get-Prop $_ 'id' }) -join ','), $vIds)
   return $next
 }
 
@@ -576,7 +583,7 @@ function Handle-AdminCreate($req, $res) {
   }
   $state.editions = @($eds + , $draft)
   Write-State $state | Out-Null
-  $persisted = (To-Array (Get-Prop (Read-State) 'editions') | ForEach-Object { Get-Prop $_ 'id' }) -join ','
+  $persisted = (@(To-Array (Get-Prop (Read-State) 'editions')) | ForEach-Object { Get-Prop $_ 'id' }) -join ','
   Log-Debug ("CREATE template_from='{0}' returnedId={1} persistedIds=[{2}]" -f $from, $draft['id'], $persisted)
   Send-Json $res 201 ([ordered]@{ id = $draft['id']; edition = $draft })
 }
