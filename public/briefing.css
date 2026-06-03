@@ -460,6 +460,9 @@ html, body { margin: 0; padding: 0; }
   cursor: pointer;
 }
 .briefing-app .admin-bar button:hover { background: rgba(255,255,255,0.18); }
+/* The select's color:#fff makes native dropdown options white-on-(default light)
+   popup -- only the hovered row was legible. Give options an explicit dark popup. */
+.briefing-app .admin-bar select option { color: #fff; background: #1c2742; }
 .briefing-app .admin-bar .btn-primary { background: var(--crh-teal); border-color: var(--crh-teal); }
 .briefing-app .admin-bar .btn-primary:hover { background: #018fa3; }
 .briefing-app .admin-bar .chip {

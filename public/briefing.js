@@ -185,7 +185,7 @@ function Briefing({ edition, layout, setLayout, expanded, setExpanded, edit, dat
     html`<div class="orientation-bar">
       <div class="orientation-bar__left">
         <span class="orientation-bar__badge">Meridian</span>
-        <span>Crystal Run Healthcare · Primary &amp; Urgent Care · Provider Briefing</span>
+        <span>Optum NY/NJ · Primary & Urgent Care · Provider Briefing</span>
       </div>
       <div class="orientation-bar__right">
         <span class="orientation-bar__layout-label">Layout:</span>
@@ -200,7 +200,7 @@ function Briefing({ edition, layout, setLayout, expanded, setExpanded, edit, dat
       <div class="masthead">
         <div class="masthead-left">
           <div class="masthead-title">Provider Briefing</div>
-          <div class="masthead-subtitle">Primary &amp; Urgent Care · Optum NY/NJ</div>
+          <div class="masthead-subtitle">Primary & Urgent Care · Optum NY/NJ</div>
         </div>
         <div class="masthead-meta">
           ${edit
@@ -270,12 +270,12 @@ function Briefing({ edition, layout, setLayout, expanded, setExpanded, edit, dat
             ${expanded === null || edit
               ? html`<${Fragment}>
                   <div class="panel-header">
-                    <div class="panel-header-title">Active Initiatives &amp; Projects</div>
+                    <div class="panel-header-title">Active Initiatives & Projects</div>
                     <div class="panel-header-sub">${edit ? 'Editing — rows are not collapsible here' : 'Click any row for details →'}</div>
                   </div>
                   <div class="projects-table">
                     <table>
-                      <thead><tr><th>Initiative</th><th>Current Status &amp; Provider Action</th></tr></thead>
+                      <thead><tr><th>Initiative</th><th>Current Status & Provider Action</th></tr></thead>
                       <tbody>
                         ${ed.initiatives.map(
                           (it, i) => html`<tr key=${i} onClick=${() => !edit && setExpanded(it.key || String(i))}>
@@ -359,7 +359,7 @@ function Briefing({ edition, layout, setLayout, expanded, setExpanded, edit, dat
           ${edit && html`<button type="button" class="add-row-btn" style="display:inline-block;width:auto;margin:0;padding:4px 10px;" onClick=${() => edit.addItem('footerLinks')}>+ Link</button>`}
         </div>
         <div class="footer-meta">
-          <span>Medical Director, Primary &amp; Urgent Care · Crystal Run Healthcare · Optum NY/NJ</span>
+          <span>Medical Director, Primary & Urgent Care · Optum NY/NJ</span>
           ${!edit && html`<button type="button" class="print-btn" onClick=${() => window.print()}>🖨 Print</button>`}
         </div>
       </div>

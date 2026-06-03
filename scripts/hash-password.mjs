@@ -3,8 +3,8 @@
 //
 //   npm run hash-password
 //
-// Prompts for a password (echo suppressed), derives a scrypt hash + random
-// salt, and prints the two lines to paste into .env:
+// Prompts for a password (echo suppressed), derives a PBKDF2-HMAC-SHA256 hash
+// + random salt (params in lib/auth.js), and prints the two lines for .env:
 //
 //   ADMIN_PASSWORD_HASH=<hex>
 //   ADMIN_PASSWORD_SALT=<hex>
@@ -12,6 +12,8 @@
 // The plaintext password never touches disk and never leaves this process.
 // Run it on the Linux dev box; paste the output into .env on each machine
 // (dev / orange device / CR DEV server). To rotate, re-run and replace both.
+// On a Windows box with no Node, scripts/hash-password.ps1 produces the SAME
+// hash (identical PBKDF2 params) — either generator works on either side.
 //
 // Non-interactive use (CI / scripted dev): pipe the password on stdin, e.g.
 //   echo 'mypw' | node scripts/hash-password.mjs

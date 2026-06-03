@@ -1,4 +1,4 @@
-// Auth: scrypt hash/verify, cookie parse/build, session create/validate/expire.
+// Auth: PBKDF2 hash/verify, cookie parse/build, session create/validate/expire.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,6 +16,17 @@ import {
 test('hashPassword + verifyPassword accepts the right password', () => {
   const { hashHex, saltHex } = hashPassword('correct horse');
   assert.equal(verifyPassword('correct horse', hashHex, saltHex), true);
+});
+
+// Cross-runtime contract anchor: this exact (password, salt) → hash must hold
+// in BOTH Node (lib/auth.js) and PowerShell (deploy/server.ps1, .NET
+// Rfc2898DeriveBytes). If the PS port computes a different hash for this vector,
+// the two runtimes can't share one .env — params drifted. See deploy/server.ps1
+// header for the matching PowerShell assertion.
+test('PBKDF2 known-answer vector (Node↔.NET contract)', () => {
+  const saltHex = '0123456789abcdef0123456789abcdef';
+  const { hashHex } = hashPassword('meridian-briefing-test-vector', saltHex);
+  assert.equal(hashHex, '3200cac5c739d530f811c800e184b012c4e25b0b24de8ac8930a9f1e5ed5bb59');
 });
 
 test('verifyPassword rejects the wrong password', () => {

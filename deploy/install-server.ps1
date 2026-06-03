@@ -1,8 +1,11 @@
 # meridian-briefing — CR DEV server install (runs IN PLACE from a git clone).
 #
-# Registers a scheduled task that starts the Node server AT SYSTEM STARTUP (no
-# interactive logon needed), running as SYSTEM so it can bind 0.0.0.0. To update
-# later: `git pull` in the clone, then restart the task (last line prints how).
+# Registers a scheduled task that starts the PowerShell server (deploy\server.ps1)
+# AT SYSTEM STARTUP (no interactive logon needed), running as SYSTEM so it can
+# bind 0.0.0.0 and satisfy the HttpListener URL ACL. NO Node required — this is
+# the no-Node production path. (Node boxes can run server.js instead; see
+# deploy\README-server.md.) To update later: `git pull` in the clone, then
+# restart the task (last line prints how).
 #
 #   cd D:\meridian-briefing
 #   powershell -ExecutionPolicy Bypass -File deploy\install-server.ps1
@@ -23,24 +26,18 @@ Write-Host "------------------------------------------------------------------" 
 Write-Host "Repo root: $Root"
 
 # --- 1. Sanity ---
-if (-not (Test-Path -LiteralPath (Join-Path $Root "server.js"))) {
-  Write-Host "ERROR: server.js not found in $Root. Run from deploy\ inside the clone." -ForegroundColor Red
+$ServerPs1 = Join-Path $ScriptDir "server.ps1"
+if (-not (Test-Path -LiteralPath $ServerPs1)) {
+  Write-Host "ERROR: server.ps1 not found in $ScriptDir. Run from deploy\ inside the clone." -ForegroundColor Red
   exit 1
 }
 
-# --- 2. Node 20.6+ ---
-$NodeCmd = Get-Command node -ErrorAction SilentlyContinue
-if (-not $NodeCmd) {
-  Write-Host "ERROR: 'node' not on PATH. Install Node 20.6+ (LTS), reopen the terminal." -ForegroundColor Red
+# --- 2. Windows PowerShell 5.1+ (no Node needed) ---
+if ($PSVersionTable.PSVersion.Major -lt 5) {
+  Write-Host "ERROR: Windows PowerShell 5.1+ required (found $($PSVersionTable.PSVersion))." -ForegroundColor Red
   exit 1
 }
-$verRaw = (& node --version).TrimStart('v')
-$verParts = $verRaw.Split('.'); $major = [int]$verParts[0]; $minor = [int]$verParts[1]
-Write-Host "Node: v$verRaw"
-if ($major -lt 20 -or ($major -eq 20 -and $minor -lt 6)) {
-  Write-Host "ERROR: Node v$verRaw too old; --env-file needs 20.6+." -ForegroundColor Red
-  exit 1
-}
+Write-Host "PowerShell: $($PSVersionTable.PSVersion)  (.NET Framework 4.6.1+ required for Rfc2898DeriveBytes/SHA256)"
 
 # --- 3. .env from example if missing ---
 $envPath    = Join-Path $Root ".env"
@@ -86,14 +83,23 @@ try {
   Write-Host "  (no port owner found)" -ForegroundColor DarkGray
 }
 
+# --- 5b. Reserve the URL ACL so SYSTEM can bind http://+:PORT/ (HOST=0.0.0.0) ---
+# SYSTEM can usually bind the wildcard prefix without this, but reserving it is
+# harmless and removes one failure mode. Already-exists (error 183) is fine.
+$prefix = "http://+:$Port/"
+& netsh http add urlacl url=$prefix user="NT AUTHORITY\SYSTEM" 2>&1 | Out-Null
+Write-Host "URL ACL ensured for $prefix (SYSTEM)."
+
 # --- 6. Register: runs as SYSTEM at startup, from the clone dir ---
-$Action    = New-ScheduledTaskAction -Execute "node.exe" -Argument "--env-file=.env server.js" -WorkingDirectory $Root
+$PsExe     = (Get-Command powershell.exe).Source
+$PsArgs    = "-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File `"$ServerPs1`""
+$Action    = New-ScheduledTaskAction -Execute $PsExe -Argument $PsArgs -WorkingDirectory $Root
 $Trigger   = New-ScheduledTaskTrigger -AtStartup
 $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $Settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1)
 if ($existing) { Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false }
 Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings | Out-Null
-Write-Host "Task '$TaskName' registered (runs as SYSTEM at startup)." -ForegroundColor Green
+Write-Host "Task '$TaskName' registered (PowerShell server, runs as SYSTEM at startup)." -ForegroundColor Green
 
 # --- 7. Start + verify ---
 Start-ScheduledTask -TaskName $TaskName
