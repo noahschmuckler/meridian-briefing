@@ -726,6 +726,25 @@ while ($listener.IsListening) {
   try {
     Handle-Request $context.Request $context.Response
   } catch {
-    try { Send-Json $context.Response 500 ([ordered]@{ error = $_.Exception.Message }) } catch { }
+    $err = $_
+    # Log the full error (message + PS line + stack) so failures are diagnosable
+    # without a debugger. server-error.log sits in the repo root; tail it with
+    #   Get-Content .\server-error.log -Tail 40
+    try {
+      $stamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+      $where = ''
+      try { $where = "$($context.Request.HttpMethod) $($context.Request.Url.AbsolutePath)" } catch { }
+      $detail = @(
+        "[$stamp] $where",
+        "  Message: $($err.Exception.Message)",
+        "  Type:    $($err.Exception.GetType().FullName)",
+        "  At:      $($err.InvocationInfo.PositionMessage -replace "`r?`n", ' ')",
+        "  Stack:   $($err.ScriptStackTrace -replace "`r?`n", ' | ')",
+        ''
+      ) -join "`n"
+      Add-Content -LiteralPath (Join-Path $script:RepoRoot 'server-error.log') -Value $detail
+      Write-Host $detail -ForegroundColor Red
+    } catch { }
+    try { Send-Json $context.Response 500 ([ordered]@{ error = $err.Exception.Message }) } catch { }
   }
 }
