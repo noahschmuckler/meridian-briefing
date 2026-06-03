@@ -43,11 +43,11 @@ cp .env.example .env
 npm run seed
 
 # 4. Run it
-npm run dev          # node --env-file=.env server.js  → http://127.0.0.1:8787
+npm run dev          # node --env-file=.env server.js  → http://127.0.0.1:8788
 ```
 
-- Provider view: <http://127.0.0.1:8787/>
-- Editor: <http://127.0.0.1:8787/admin>
+- Provider view: <http://127.0.0.1:8788/>
+- Editor: <http://127.0.0.1:8788/admin>
 
 ```sh
 npm test             # store + auth + end-to-end API tests (node:test)

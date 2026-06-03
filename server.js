@@ -208,11 +208,16 @@ async function handleAdminCreate(req, res) {
   const state = await readState();
   let draft;
   const from = body?.template_from;
-  if (from === 'blank' || from === null || from === undefined) {
-    draft = blankEdition(body?.date, body?.title);
-  } else {
-    const src = from === 'current' ? currentEdition(state) : state.editions.find((e) => e.id === from);
+  // Resolve the source edition to copy, if any. 'current' with nothing published
+  // (first-run) falls back to a blank starter rather than erroring.
+  let src = null;
+  if (from && from !== 'blank' && from !== 'current') {
+    src = state.editions.find((e) => e.id === from);
     if (!src) return sendJson(res, 400, { error: `template_from '${from}' not found` });
+  } else if (from === 'current') {
+    src = currentEdition(state); // may be null on a fresh box
+  }
+  if (src) {
     // Deep clone via JSON, then re-stamp as a fresh unpublished draft.
     draft = normalizeEdition(JSON.parse(JSON.stringify(src)));
     draft.id = blankEdition().id; // fresh id
@@ -220,6 +225,8 @@ async function handleAdminCreate(req, res) {
     draft.published_at = null;
     draft.date = body?.date || new Date().toISOString().slice(0, 10);
     draft.title = body?.title || `${src.title} (copy)`;
+  } else {
+    draft = blankEdition(body?.date, body?.title);
   }
   state.editions.push(draft);
   await writeState(state);

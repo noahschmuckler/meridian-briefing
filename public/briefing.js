@@ -492,7 +492,8 @@ function Editor({ onLogout }) {
   const [list, setList] = useState([]); // [{id,date,title,published,...}]
   const [currentId, setCurrentId] = useState(null);
   const [selId, setSelId] = useState(null);
-  const [edition, setEdition] = useState(null); // working copy
+  const [edition, setEdition] = useState(null); // working copy (null = none selected)
+  const [loaded, setLoaded] = useState(false); // first admin-list fetch resolved
   const [layout, setLayout] = useState('landscape');
   const [saveState, setSaveState] = useState('idle'); // idle|saving|saved|error
   const [showNew, setShowNew] = useState(false);
@@ -500,7 +501,12 @@ function Editor({ onLogout }) {
 
   const refreshList = useCallback(async (pick) => {
     const r = await apiJson('/api/admin/editions');
-    if (!r.ok) return null;
+    if (!r.ok) {
+      // Session likely expired — drop back to the login gate rather than hang.
+      if (r.status === 401) onLogout();
+      setLoaded(true);
+      return null;
+    }
     setList(r.body.editions);
     setCurrentId(r.body.current_edition_id);
     const target = pick || selId || r.body.current_edition_id || (r.body.editions[0] && r.body.editions[0].id);
@@ -509,8 +515,9 @@ function Editor({ onLogout }) {
       setSelId(e.id);
       setEdition(e);
     }
+    setLoaded(true); // resolved — even with zero editions, stop showing "Loading…"
     return r.body;
-  }, [selId]);
+  }, [selId, onLogout]);
 
   useEffect(() => {
     refreshList();
@@ -615,7 +622,7 @@ function Editor({ onLogout }) {
     onLogout();
   }, [onLogout]);
 
-  if (!edition) {
+  if (!loaded) {
     return html`<div class="briefing-app"><div class="briefing-status">Loading editor…</div></div>`;
   }
 
@@ -625,30 +632,40 @@ function Editor({ onLogout }) {
     <div class="briefing-app admin-mode" style="min-height:0;">
       <div class="admin-bar">
         <span class="admin-bar__brand">Briefing Editor</span>
-        <select value=${selId} onChange=${(e) => selectEdition(e.currentTarget.value)}>
+        ${list.length > 0 &&
+        html`<select value=${selId} onChange=${(e) => selectEdition(e.currentTarget.value)}>
           ${list.map((e) => html`<option value=${e.id}>${e.published ? '● ' : '○ '}${e.title} — ${e.date}</option>`)}
-        </select>
-        <button type="button" onClick=${() => setShowNew(true)}>+ New draft</button>
-        <span class=${'chip ' + (edition.published ? 'chip-published' : 'chip-draft')}>${edition.published ? 'Published' : 'Draft'}</span>
-        ${edition.id === currentId && html`<span class="chip chip-published">Current</span>`}
+        </select>`}
+        <button type="button" class="btn-primary" onClick=${() => setShowNew(true)}>+ New draft</button>
+        ${edition &&
+        html`<${Fragment}>
+          <span class=${'chip ' + (edition.published ? 'chip-published' : 'chip-draft')}>${edition.published ? 'Published' : 'Draft'}</span>
+          ${edition.id === currentId && html`<span class="chip chip-published">Current</span>`}
+        <//>`}
         <span class="admin-bar__spacer"></span>
-        <span class=${'save-state' + (saveState === 'error' ? ' error' : '')}>${saveLabel}</span>
-        <label class="publish-toggle">
+        ${edition && html`<span class=${'save-state' + (saveState === 'error' ? ' error' : '')}>${saveLabel}</span>`}
+        ${edition &&
+        html`<label class="publish-toggle">
           <input type="checkbox" checked=${edition.published} onChange=${togglePublish} />
           Published
-        </label>
+        </label>`}
         <button type="button" onClick=${doLogout}>Log out</button>
       </div>
     </div>
-    <${Briefing}
-      edition=${edition}
-      layout=${layout}
-      setLayout=${setLayout}
-      expanded=${null}
-      setExpanded=${() => {}}
-      edit=${{ onEdit: applyEdit, addItem, removeItem, moveItem }}
-      dateMenu=${null}
-    />
+    ${edition
+      ? html`<${Briefing}
+          edition=${edition}
+          layout=${layout}
+          setLayout=${setLayout}
+          expanded=${null}
+          setExpanded=${() => {}}
+          edit=${{ onEdit: applyEdit, addItem, removeItem, moveItem }}
+          dateMenu=${null}
+        />`
+      : html`<div class="briefing-app"><div class="briefing-status">
+          <h2 style="font-family:'DM Serif Display',serif;color:var(--crh-navy);">No editions yet</h2>
+          <p>Click <strong>+ New draft</strong> above to create your first briefing, then publish it.</p>
+        </div></div>`}
     ${showNew && html`<${NewDraftDialog} editions=${list} onCreate=${doCreate} onClose=${() => setShowNew(false)} />`}
   <//>`;
 }

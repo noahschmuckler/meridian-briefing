@@ -59,8 +59,8 @@ if (-not (Test-Path -LiteralPath $envPath)) {
   Write-Host ".env already present (preserved)."
 }
 
-# --- 4. Read PORT from .env for the post-start health check (default 8787) ---
-$Port = 8787
+# --- 4. Read PORT from .env for the post-start health check (default 8788) ---
+$Port = 8788
 if (Test-Path -LiteralPath $envPath) {
   foreach ($line in Get-Content -LiteralPath $envPath) {
     if ($line -match '^\s*PORT\s*=\s*(\d+)') { $Port = [int]$Matches[1] }

@@ -11,7 +11,7 @@
 $ErrorActionPreference = "Stop"
 
 $TaskName = "BriefingServer"
-$Port     = 8787
+$Port     = 8788   # default; overridden below by PORT= in .env if present
 
 # Repo root = the parent of this script's folder (deploy\).
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -58,6 +58,14 @@ if (-not (Test-Path -LiteralPath $envPath)) {
 } else {
   Write-Host ".env already present (preserved)."
 }
+
+# --- 3b. Read PORT from .env so the health check matches the real port ---
+if (Test-Path -LiteralPath $envPath) {
+  foreach ($line in Get-Content -LiteralPath $envPath) {
+    if ($line -match '^\s*PORT\s*=\s*(\d+)') { $Port = [int]$Matches[1] }
+  }
+}
+Write-Host "Configured port: $Port"
 
 # --- 4. Stop a prior task + free the port (orphan-node gotcha) ---
 $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue

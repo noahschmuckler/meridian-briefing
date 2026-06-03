@@ -13,8 +13,8 @@ single `state.json` file. No database, no runtime npm dependencies — just Node
 
 ```
   orange box
-  node --env-file=.env server.js   →   http://127.0.0.1:8787/        (read)
-                                       http://127.0.0.1:8787/admin    (editor)
+  node --env-file=.env server.js   →   http://127.0.0.1:8788/        (read)
+                                       http://127.0.0.1:8788/admin    (editor)
   state lives in .\data\state.json
 ```
 
@@ -45,7 +45,7 @@ The repo is cloned via GitHub Desktop (e.g.
    ```powershell
    Stop-ScheduledTask -TaskName BriefingServer ; Start-ScheduledTask -TaskName BriefingServer
    ```
-4. Open `http://127.0.0.1:8787/` (read view) and `http://127.0.0.1:8787/admin`
+4. Open `http://127.0.0.1:8788/` (read view) and `http://127.0.0.1:8788/admin`
    (sign in with the password you hashed).
 
 **Just want to see it run once (no scheduled task)?**
@@ -54,7 +54,7 @@ cd C:\Users\<you>\Documents\GitHub\meridian-briefing
 copy .env.example .env       # then edit .env (paste the hash+salt)
 node --env-file=.env server.js
 ```
-Browse to `http://127.0.0.1:8787/`; Ctrl+C to stop.
+Browse to `http://127.0.0.1:8788/`; Ctrl+C to stop.
 
 **To update later:** GitHub Desktop → *Sync*, then the restart line from step 3.
 `.env` and `data\` are gitignored, so a Sync never touches your password or your
@@ -90,7 +90,7 @@ Unregister-ScheduledTask -TaskName BriefingServer -Confirm:$false
 
 ## Troubleshooting
 
-- **Port 8787 didn't come up.** Check `Get-ScheduledTaskInfo -TaskName BriefingServer`.
+- **Port 8788 didn't come up.** Check `Get-ScheduledTaskInfo -TaskName BriefingServer`.
   Common cause: a `BRIEFING_DB` path whose parent folder doesn't exist — create
   it first, or leave the default `.\data\state.json` (the server creates `data\`).
 - **/admin says "not configured".** `.env` is missing the `ADMIN_PASSWORD_HASH` /
