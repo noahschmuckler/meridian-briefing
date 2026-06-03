@@ -539,6 +539,7 @@ function Handle-AdminList($req, $res) {
   $byGroup = @{ Expression = { if ((Get-Prop $_ 'published') -eq $true) { 1 } else { 0 } }; Ascending = $true }
   $byDate = @{ Expression = { [string](Get-Prop $_ 'date') }; Descending = $true }
   $sorted = @($eds | Sort-Object -Property $byGroup, $byDate)
+  Log-Debug ("LIST returns ids=[{0}]" -f (($sorted | ForEach-Object { Get-Prop $_ 'id' }) -join ','))
   Send-Json $res 200 ([ordered]@{ current_edition_id = (Get-Prop $state 'current_edition_id'); editions = @($sorted) })
 }
 
@@ -635,6 +636,7 @@ function Handle-AdminDelete($req, $res, [string]$id) {
 function Handle-Request($req, $res) {
   $pathname = $req.Url.AbsolutePath
   $method = $req.HttpMethod
+  if ($pathname.StartsWith('/api/')) { Log-Debug ("REQ {0} {1}" -f $method, $pathname) }
 
   # public API
   if ($pathname -eq '/api/editions/current' -and $method -eq 'GET') { Handle-Current $req $res; return }
