@@ -185,7 +185,7 @@ function Briefing({ edition, layout, setLayout, expanded, setExpanded, edit, dat
     html`<div class="orientation-bar">
       <div class="orientation-bar__left">
         <span class="orientation-bar__badge">Meridian</span>
-        <span>Crystal Run Healthcare · Primary & Urgent Care · Provider Briefing</span>
+        <span>Optum NY/NJ · Primary & Urgent Care · Provider Briefing</span>
       </div>
       <div class="orientation-bar__right">
         <span class="orientation-bar__layout-label">Layout:</span>
@@ -359,7 +359,7 @@ function Briefing({ edition, layout, setLayout, expanded, setExpanded, edit, dat
           ${edit && html`<button type="button" class="add-row-btn" style="display:inline-block;width:auto;margin:0;padding:4px 10px;" onClick=${() => edit.addItem('footerLinks')}>+ Link</button>`}
         </div>
         <div class="footer-meta">
-          <span>Medical Director, Primary & Urgent Care · Crystal Run Healthcare · Optum NY/NJ</span>
+          <span>Medical Director, Primary & Urgent Care · Optum NY/NJ</span>
           ${!edit && html`<button type="button" class="print-btn" onClick=${() => window.print()}>🖨 Print</button>`}
         </div>
       </div>

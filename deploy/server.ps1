@@ -38,8 +38,7 @@
 # ==================================================================
 
 param(
-  [switch]$SelfTest,
-  [switch]$DataTest
+  [switch]$SelfTest
 )
 
 $ErrorActionPreference = 'Stop'
@@ -97,14 +96,6 @@ function Get-Prop($o, [string]$name) {
     return $null
   }
   return $null
-}
-
-# Safe comma-joined edition ids for logging. Uses bare To-Array + foreach so it
-# never trips the @(To-Array ...) double-wrap (which made the WRITE log read []).
-function Get-EdIds($container) {
-  $acc = New-Object System.Collections.ArrayList
-  foreach ($e in (To-Array (Get-Prop $container 'editions'))) { [void]$acc.Add([string](Get-Prop $e 'id')) }
-  return ($acc -join ',')
 }
 
 # Shallow-copy any object's own properties into an ordered dictionary (handles
@@ -326,13 +317,6 @@ function Write-State($state) {
   } else {
     [System.IO.File]::Move($tmp, $path)
   }
-  # TEMP: verify the write actually stuck by re-reading the file immediately.
-  $vIds = '<unread>'
-  try {
-    $vTxt = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
-    $vIds = Get-EdIds ($vTxt | ConvertFrom-Json)
-  } catch { $vIds = "<reread-failed: $($_.Exception.Message)>" }
-  Log-Debug ("WRITE path={0} exists={1} wroteIds=[{2}] reReadIds=[{3}]" -f $path, (Test-Path -LiteralPath $path), (Get-EdIds $next), $vIds)
   return $next
 }
 
@@ -437,16 +421,6 @@ function Get-EnvOr([string]$key, $default) {
 }
 
 function Test-AdminConfigured { return ([bool]$script:AdminHash -and [bool]$script:AdminSalt) }
-
-# TEMP diagnostic logging — appends to server-debug.log + echoes to console.
-# Remove once the 401/404 cause is found.
-function Log-Debug([string]$msg) {
-  try {
-    $line = '[{0}] {1}' -f (Get-Date).ToString('HH:mm:ss'), $msg
-    Add-Content -LiteralPath (Join-Path $script:RepoRoot 'server-debug.log') -Value $line
-    Write-Host $line -ForegroundColor DarkCyan
-  } catch { }
-}
 
 # ---------- HTTP send helpers ----------
 
@@ -556,7 +530,6 @@ function Handle-Login($req, $res) {
   if (-not $ok) { Send-Json $res 401 ([ordered]@{ error = 'wrong password' }); return }
   $id = New-Session
   $cookieHdr = Cookie-SetHeader $id $script:TtlDays
-  Log-Debug ("LOGIN ok sid={0} sessions={1} setCookie='{2}'" -f $id.Substring(0, 8), $script:Sessions.Count, $cookieHdr)
   Send-Json $res 200 ([ordered]@{ ok = $true }) @($cookieHdr)
 }
 
@@ -574,7 +547,6 @@ function Handle-AdminList($req, $res) {
   $byGroup = @{ Expression = { if ((Get-Prop $_ 'published') -eq $true) { 1 } else { 0 } }; Ascending = $true }
   $byDate = @{ Expression = { [string](Get-Prop $_ 'date') }; Descending = $true }
   $sorted = @($eds | Sort-Object -Property $byGroup, $byDate)
-  Log-Debug ("LIST returns ids=[{0}]" -f (($sorted | ForEach-Object { Get-Prop $_ 'id' }) -join ','))
   Send-Json $res 200 ([ordered]@{ current_edition_id = (Get-Prop $state 'current_edition_id'); editions = @($sorted) })
 }
 
@@ -611,8 +583,6 @@ function Handle-AdminCreate($req, $res) {
   }
   $state['editions'] = @($eds + , $draft)
   Write-State $state | Out-Null
-  $persisted = Get-EdIds (Read-State)
-  Log-Debug ("CREATE template_from='{0}' returnedId={1} persistedIds=[{2}]" -f $from, $draft['id'], $persisted)
   Send-Json $res 201 ([ordered]@{ id = $draft['id']; edition = $draft })
 }
 
@@ -624,8 +594,6 @@ function Handle-AdminPatch($req, $res, [string]$id) {
   $eds = To-Array (Get-Prop $state 'editions')
   $idx = -1
   for ($i = 0; $i -lt $eds.Count; $i++) { if ((Get-Prop $eds[$i] 'id') -eq $id) { $idx = $i; break } }
-  $availIds = ($eds | ForEach-Object { Get-Prop $_ 'id' }) -join ','
-  Log-Debug ("PATCH reqId={0} matchIdx={1} availIds=[{2}]" -f $id, $idx, $availIds)
   if ($idx -lt 0) { Send-Json $res 404 ([ordered]@{ error = 'not found' }); return }
   $merged = Clone-Props $eds[$idx]
   foreach ($k in $script:Patchable) {
@@ -671,7 +639,6 @@ function Handle-AdminDelete($req, $res, [string]$id) {
 function Handle-Request($req, $res) {
   $pathname = $req.Url.AbsolutePath
   $method = $req.HttpMethod
-  if ($pathname.StartsWith('/api/')) { Log-Debug ("REQ {0} {1}" -f $method, $pathname) }
 
   # public API
   if ($pathname -eq '/api/editions/current' -and $method -eq 'GET') { Handle-Current $req $res; return }
@@ -685,12 +652,7 @@ function Handle-Request($req, $res) {
 
   # everything else under /api/admin/ is gated
   if ($pathname.StartsWith('/api/admin/')) {
-    $sidDbg = Get-SessionCookie $req
-    $sidShort = if ($sidDbg) { $sidDbg.Substring(0, [Math]::Min(8, $sidDbg.Length)) } else { '<none>' }
-    $rawCookie = $req.Headers['Cookie']
-    $authOk = Test-Session $sidDbg
-    Log-Debug ("AUTH {0} {1} rawCookie='{2}' sid={3} known={4} sessions={5}" -f $method, $pathname, $rawCookie, $sidShort, $authOk, $script:Sessions.Count)
-    if (-not $authOk) { Send-Json $res 401 ([ordered]@{ error = 'unauthorized' }); return }
+    if (-not (Test-Session (Get-SessionCookie $req))) { Send-Json $res 401 ([ordered]@{ error = 'unauthorized' }); return }
     if ($pathname -eq '/api/admin/editions' -and $method -eq 'GET') { Handle-AdminList $req $res; return }
     if ($pathname -eq '/api/admin/editions' -and $method -eq 'POST') { Handle-AdminCreate $req $res; return }
     $pub = [regex]::Match($pathname, '^/api/admin/editions/([^/]+)/publish$')
@@ -746,71 +708,6 @@ function Invoke-SelfTest {
   exit 0
 }
 
-# ---------- data-test (no listener, no HTTP, no disk writes) ----------
-# Bisects the editions-array data path used by Handle-AdminCreate to find the
-# exact operation where an edition vanishes on Windows PowerShell 5.1. Pure
-# in-memory; safe to run anytime. Each line prints what it observed; the first
-# COUNT that reads 0 (or a wrong type) names the broken operation.
-function Invoke-DataTest {
-  $ErrorActionPreference = 'Continue' # one bad probe shouldn't abort the rest
-  $green = 'Green'; $red = 'Red'; $cyan = 'Cyan'; $yellow = 'Yellow'
-  function P([string]$label, $got, $want) {
-    $ok = ($null -ne $want) -and ([string]$got -eq [string]$want)
-    $color = if ($null -eq $want) { $cyan } elseif ($ok) { $green } else { $red }
-    $tail = if ($null -eq $want) { '' } else { "   (want $want)" }
-    Write-Host ("  {0,-58} {1}{2}" -f $label, $got, $tail) -ForegroundColor $color
-  }
-  function TypeName($v) { if ($null -eq $v) { return '<null>' } else { return $v.GetType().Name } }
-  # Cnt/Ids use the CORRECT idiom (bare To-Array, then measure). After the
-  # 2026-06-03 fix these should all match their 'want' values.
-  function Cnt($gp) { $a = To-Array $gp; return $a.Count }
-  function Ids($gp) { $acc = @(); foreach ($e in (To-Array $gp)) { $acc += [string](Get-Prop $e 'id') }; return ($acc -join ',') }
-
-  Write-Host ''
-  Write-Host ("DATATEST  PSVersion={0}  Edition={1}" -f $PSVersionTable.PSVersion, $PSVersionTable.PSEdition) -ForegroundColor $yellow
-  Write-Host '--- root-cause demo: the @(To-Array x) double-wrap (the bug) vs bare (the fix) ---' -ForegroundColor $yellow
-  $probe = [ordered]@{ id = 'x'; date = 'd'; title = 't' }
-  $two = [ordered]@{ editions = @($probe, $probe) }
-  P 'BUG  @(To-Array 2-elem).Count  (the old call sites)' (@(To-Array (Get-Prop $two 'editions')).Count) 1
-  P 'FIX  Cnt 2-elem                (bare To-Array)' (Cnt (Get-Prop $two 'editions')) 2
-
-  Write-Host '--- A-E: replay Handle-AdminCreate data path on a FRESH (empty) state ---' -ForegroundColor $yellow
-
-  # Fresh box == Read-State with no file == Normalize-State(Empty-State).
-  $state = Normalize-State (Empty-State)
-  P 'A  start editions count' (Cnt (Get-Prop $state 'editions')) 0
-
-  $eds = To-Array (Get-Prop $state 'editions')
-  P 'A2 $eds = To-Array(...) .Count' $eds.Count 0
-
-  $draft = Blank-Edition '2026-06-03' 'DataTest'
-  P 'B  $draft id' $draft['id'] $null
-
-  $state['editions'] = @($eds + , $draft)
-  P 'C  after @($eds + ,$draft) count' (Cnt (Get-Prop $state 'editions')) 1
-  P 'C  ids (must be ONLY the draft, no phantom)' (Ids (Get-Prop $state 'editions')) $draft['id']
-
-  $next = Normalize-State $state
-  P 'E  Normalize-State result count' (Cnt (Get-Prop $next 'editions')) 1
-  P 'E  result ids' (Ids (Get-Prop $next 'editions')) $draft['id']
-
-  Write-Host '--- F: add a SECOND edition (the phantom/PATCH boundary) ---' -ForegroundColor $yellow
-  $eds2 = To-Array (Get-Prop $next 'editions')
-  $draft2 = Blank-Edition '2026-06-04' 'DataTest 2'
-  $next['editions'] = @($eds2 + , $draft2)
-  $next2 = Normalize-State $next
-  P 'F  two-edition count' (Cnt (Get-Prop $next2 'editions')) 2
-  P 'F  two-edition ids' (Ids (Get-Prop $next2 'editions')) ("{0},{1}" -f $draft['id'], $draft2['id'])
-
-  Write-Host '--- G: JSON round-trip (what -SelfTest exercises) survives ---' -ForegroundColor $yellow
-  $back = (Write-BriefingJson $next2 0) | ConvertFrom-Json
-  P 'G  re-normalized count after round-trip' (Cnt (Get-Prop (Normalize-State $back) 'editions')) 2
-
-  Write-Host ''
-  Write-Host 'DATATEST done. All A-G green == fix confirmed (BUG line stays 1 by design).' -ForegroundColor $yellow
-  exit 0
-}
-
 # ==================================================================
 # main
 # ==================================================================
@@ -827,7 +724,6 @@ $script:TtlDays = [double](Get-EnvOr 'SESSION_TTL_DAYS' '7')
 $script:TtlMs = [int64]($script:TtlDays * 86400 * 1000)
 
 if ($SelfTest) { Invoke-SelfTest }
-if ($DataTest) { Invoke-DataTest }
 
 # HOST 0.0.0.0 / empty -> bind all interfaces via the '+' strong wildcard.
 $prefixHost = if (-not $HostName -or $HostName -eq '0.0.0.0' -or $HostName -eq '+' -or $HostName -eq '*') { '+' } else { $HostName }
