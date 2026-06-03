@@ -45,24 +45,27 @@ in-memory `-SelfTest` passes because its final assert reads JSON-round-tripped *
 editions, NOT the raw `OrderedDictionary` editions the create path uses — so it doesn't exercise the
 broken path. (Can't be confirmed from the Linux dev box — no Windows PowerShell 5.1 to run it.)
 
-**KILLER next diagnostic (do FIRST next session, needs Windows PS 5.1):** an isolated repro that tests
-the data logic with NO HTTP/server/browser — build state exactly as `Handle-AdminCreate` does and watch
-where the edition vanishes. Sketch:
-```powershell
-# from the repo; extract the helpers or add a `-DataTest` switch to server.ps1 that runs this:
-$state = Read-State                                   # fresh/empty store
-"A getProp:    " + (@(To-Array (Get-Prop $state 'editions')).Count)      # expect 0
-$eds = @(To-Array (Get-Prop $state 'editions'))
-$draft = Blank-Edition '2026-06-03' 'T'
-"B draft id:   " + $draft['id']
-$state['editions'] = @($eds + , $draft)
-"C set dot:    " + (@($state['editions']).Count)                          # expect 1  <-- if 0, the build/assign is the bug
-"D getProp:    " + (@(To-Array (Get-Prop $state 'editions')).Count)       # expect 1  <-- if 0, Get-Prop/To-Array unwrap is the bug
-$next = Normalize-State $state
-"E normalized: " + (@(To-Array (Get-Prop $next 'editions')).Count)        # expect 1  <-- if 0, Normalize-State is the bug
+**KILLER next diagnostic — NOW WIRED as `-DataTest` (do FIRST next session, needs Windows PS 5.1):**
+an isolated repro that tests the data logic with NO HTTP/server/browser/disk-write — it builds state
+exactly as `Handle-AdminCreate` does and prints what it observes at every step. Run it on the box:
 ```
-Whichever letter first prints 0 names the exact broken operation. This bisects in <2 min without the
-browser/port/FS in the picture.
+git pull
+powershell -ExecutionPolicy Bypass -File deploy\server.ps1 -DataTest
+```
+It prints colored lines; **the first red COUNT names the exact broken operation.** Sections:
+- **M1-M4** — isolated PS-5.1 value-semantics micro-probes independent of our helpers: does `@($orderedDict)`
+  enumerate to DictionaryEntry (M1)? does a function unwrap a 1-elem array on return (M2)? does `Get-Prop`
+  unwrap a 1-elem editions array (M3)? does the 2-elem boundary survive (M4)? These pin the *mechanism*.
+- **A-E** — replays the create path on a fresh empty state: start count (A) -> `$eds` (A2) -> `Blank-Edition`
+  (B) -> the `@($eds + ,$draft)` assign (C) -> `Get-Prop`/`To-Array` read-back (D) -> `Normalize-State`
+  broken into its 3 internal steps (E1 inner read, E2 the foreach, E final). Whichever letter first reads 0
+  is the culprit line.
+- **F** — runs the JSON round-trip path that `-SelfTest` exercises (and PASSES), for direct contrast: if F is
+  green but E is red, that *confirms* the bug is specific to the raw-OrderedDictionary create path the
+  SelfTest never touches.
+
+(The probe body is `Invoke-DataTest` in `server.ps1`, just above `Invoke-SelfTest`. Pure in-memory, no
+disk writes, safe to run anytime. Remove it with the other temp diagnostics once the bug is fixed.)
 
 **Then research** PS-5.1-specific pitfalls: "PowerShell OrderedDictionary `@()` enumerates DictionaryEntry",
 "PowerShell function return unwraps single-element array", "PowerShell ConvertTo-Json single element array",

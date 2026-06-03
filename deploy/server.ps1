@@ -38,7 +38,8 @@
 # ==================================================================
 
 param(
-  [switch]$SelfTest
+  [switch]$SelfTest,
+  [switch]$DataTest
 )
 
 $ErrorActionPreference = 'Stop'
@@ -710,6 +711,94 @@ function Invoke-SelfTest {
   exit 0
 }
 
+# ---------- data-test (no listener, no HTTP, no disk writes) ----------
+# Bisects the editions-array data path used by Handle-AdminCreate to find the
+# exact operation where an edition vanishes on Windows PowerShell 5.1. Pure
+# in-memory; safe to run anytime. Each line prints what it observed; the first
+# COUNT that reads 0 (or a wrong type) names the broken operation.
+function Invoke-DataTest {
+  $ErrorActionPreference = 'Continue' # one bad probe shouldn't abort the rest
+  $green = 'Green'; $red = 'Red'; $cyan = 'Cyan'; $yellow = 'Yellow'
+  function P([string]$label, $got, $want) {
+    $ok = ($null -ne $want) -and ([string]$got -eq [string]$want)
+    $color = if ($null -eq $want) { $cyan } elseif ($ok) { $green } else { $red }
+    $tail = if ($null -eq $want) { '' } else { "   (want $want)" }
+    Write-Host ("  {0,-58} {1}{2}" -f $label, $got, $tail) -ForegroundColor $color
+  }
+  function TypeName($v) { if ($null -eq $v) { return '<null>' } else { return $v.GetType().Name } }
+
+  Write-Host ''
+  Write-Host ("DATATEST  PSVersion={0}  Edition={1}" -f $PSVersionTable.PSVersion, $PSVersionTable.PSEdition) -ForegroundColor $yellow
+  Write-Host '--- isolated PS-5.1 value-semantics micro-probes (independent of our helpers) ---' -ForegroundColor $yellow
+
+  $probe = [ordered]@{ id = 'x'; date = 'd'; title = 't' }
+
+  # M1: does @() enumerate an [ordered] dict into DictionaryEntry, or keep it as 1 object?
+  $m1 = @($probe)
+  P 'M1 @($orderedDict).Count' $m1.Count 1
+  P 'M1     element[0] type' (TypeName $m1[0]) 'OrderedDictionary'
+
+  # M2: does a function unwrap a 1-element array on return? (the unary-comma guard)
+  function _Ret-Comma { return , @($probe) }   # guarded
+  function _Ret-Plain { return @($probe) }     # unguarded
+  $r1 = _Ret-Comma; $r2 = _Ret-Plain
+  P 'M2 (,@(x)) return  -> @(_).Count' (@($r1).Count) 1
+  P 'M2  @(x)   return  -> @(_).Count' (@($r2).Count) 1
+  P 'M2  @(x)   return  -> [0] type' (TypeName (@($r2)[0])) 'OrderedDictionary'
+
+  # M3: does Get-Prop unwrap the editions array when it has exactly 1 element?
+  $d1 = [ordered]@{ editions = @($probe) }
+  $gp1 = Get-Prop $d1 'editions'
+  P 'M3 Get-Prop(1-elem editions) type' (TypeName $gp1) $null  # info: scalar here == unwrap-on-return
+  P 'M3 (Get-Prop ...).Count direct' (@($gp1).Count) 1
+  P 'M3 @(To-Array (Get-Prop ...)).Count' (@(To-Array $gp1).Count) 1
+
+  # M4: same with 2 elements (the phantom-edition boundary)
+  $d2 = [ordered]@{ editions = @($probe, $probe) }
+  P 'M4 @(To-Array (Get-Prop 2-elem)).Count' (@(To-Array (Get-Prop $d2 'editions')).Count) 2
+
+  Write-Host '--- A-E: replay Handle-AdminCreate data path on a FRESH (empty) state ---' -ForegroundColor $yellow
+
+  # Fresh box == Read-State with no file == Normalize-State(Empty-State).
+  $state = Normalize-State (Empty-State)
+  P 'A  start editions  @(To-Array (Get-Prop)).Count' (@(To-Array (Get-Prop $state 'editions')).Count) 0
+
+  $eds = @(To-Array (Get-Prop $state 'editions'))
+  P 'A2 $eds = @(...)    .Count' $eds.Count 0
+
+  $draft = Blank-Edition '2026-06-03' 'DataTest'
+  P 'B  $draft id' $draft['id'] $null
+  P 'B  $draft type' (TypeName $draft) 'OrderedDictionary'
+
+  $state['editions'] = @($eds + , $draft)
+  P 'C  $state[editions].Count (direct index)' (@($state['editions']).Count) 1
+  P 'C  $state[editions][0] type' (TypeName (@($state['editions'])[0])) 'OrderedDictionary'
+  P 'D  @(To-Array (Get-Prop $state editions)).Count' (@(To-Array (Get-Prop $state 'editions')).Count) 1
+
+  # E broken into the three internal steps of Normalize-State so we see WHICH one drops it.
+  $eInner = @(To-Array (Get-Prop $state 'editions'))
+  P 'E1 Normalize internal: $eds.Count' $eInner.Count 1
+  $acc = New-Object System.Collections.ArrayList
+  foreach ($e in $eInner) { [void]$acc.Add((Normalize-Edition $e)) }
+  P 'E2 after foreach Normalize-Edition: acc.Count' $acc.Count 1
+  if ($acc.Count -ge 1) { P 'E2  acc[0] id' (Get-Prop $acc[0] 'id') $null }
+
+  $next = Normalize-State $state
+  P 'E  Normalize-State result editions.Count' (@(To-Array (Get-Prop $next 'editions')).Count) 1
+  P 'E  result ids' (((@(To-Array (Get-Prop $next 'editions')) | ForEach-Object { Get-Prop $_ 'id' }) -join ',')) $null
+
+  Write-Host '--- F: the SelfTest path (JSON round-trip) that PASSES, for contrast ---' -ForegroundColor $yellow
+  $json = Write-BriefingJson $next 0
+  $back = $json | ConvertFrom-Json
+  P 'F  back editions type' (TypeName (Get-Prop $back 'editions')) $null
+  $reNorm = Normalize-State $back
+  P 'F  re-normalized editions.Count' (@(To-Array (Get-Prop $reNorm 'editions')).Count) 1
+
+  Write-Host ''
+  Write-Host 'DATATEST done. First red COUNT above names the broken operation.' -ForegroundColor $yellow
+  exit 0
+}
+
 # ==================================================================
 # main
 # ==================================================================
@@ -726,6 +815,7 @@ $script:TtlDays = [double](Get-EnvOr 'SESSION_TTL_DAYS' '7')
 $script:TtlMs = [int64]($script:TtlDays * 86400 * 1000)
 
 if ($SelfTest) { Invoke-SelfTest }
+if ($DataTest) { Invoke-DataTest }
 
 # HOST 0.0.0.0 / empty -> bind all interfaces via the '+' strong wildcard.
 $prefixHost = if (-not $HostName -or $HostName -eq '0.0.0.0' -or $HostName -eq '+' -or $HostName -eq '*') { '+' } else { $HostName }
