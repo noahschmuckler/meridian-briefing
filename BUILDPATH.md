@@ -4,7 +4,59 @@ High-density status for picking up work in a fresh session. Pairs with CLAUDE.md
 (conventions/locked decisions) and `~/.claude/plans/meridian-briefing-v1.md`
 (original plan).
 
-## Status: v1 Phase 1 complete (Linux scaffold + GitHub)
+## ⚠️ ACTIVE BLOCKER (2026-06-03): PowerShell server doesn't persist edition writes on the E: dev box
+
+Branch `noah/powershell-server` (PR #1). The PowerShell port (`deploy/server.ps1`)
+runs on Noah's enterprise Windows box (drive `E:`, `BRIEFING_DB=E:\meridian-briefing-data\state.json`,
+`HOST=127.0.0.1 PORT=8788`, foreground via `powershell -File deploy\server.ps1`).
+`-SelfTest` PASSES. Login/auth/static all work. **But creating/saving an edition never persists.**
+
+**Symptom (from the temp `server-debug.log` instrumentation, still in the code):**
+on `POST /api/admin/editions` the create returns a real id but `WRITE … wroteIds=[] reReadIds=[]`
+— i.e. `Normalize-State` produced an empty `editions` and the file re-read right after the
+atomic write is also empty. Then milliseconds later, same single-threaded process, `LIST returns
+ids=[ed_…X, ed_…Y]` — **a phantom 2nd edition appears that no logged `WRITE` created** — and the
+subsequent autosave `PATCH` gets `matchIdx=-1 availIds=[]` → **404 "save failed."** The file's
+contents differ between two reads ms apart with no writer between them.
+
+**Ruled OUT (each verified, don't re-chase):**
+- Auth/session/cookie — `AUTH … known=True sessions=1` after login; PATCH passes the gate (404, not 401).
+- OrderedDictionary member-vs-key assignment — fixed in `e98f1a3` (all writes use `$state['editions']=`),
+  confirmed running (`git log` HEAD = `e98f1a3`); `wroteIds=[]` STILL occurs.
+- Multiple/zombie servers — killed all `server.ps1` procs + removed any `BriefingServer` scheduled
+  task; `Get-NetTCPConnection -LocalPort 8788` confirmed empty before starting exactly one server.
+- Stale browser — reproduced in a fresh InPrivate tab.
+- Corrupt/malformed `state.json` — file is valid JSON; reads parse fine (read view + LIST work).
+- Filesystem permissions / admin rights — writes succeed (state.json is created with content); a perms
+  block would throw → 500 in `server-error.log`, which does NOT exist (no exceptions thrown).
+
+**Leading hypothesis:** an environmental idiosyncrasy of the `E:` volume — non-atomic / delayed-commit
+write semantics, or an AV/DLP/sync filter intercepting the temp-file→`[System.IO.File]::Replace`/`Move`
+shuffle — yielding non-deterministic reads. The phantom id is unexplained by app code. NOT yet
+confirmed; the in-memory `-SelfTest` (no disk) passes, which is consistent with a disk/FS-layer cause.
+
+**Decisive next experiment (cheap, do FIRST next session):** set `BRIEFING_DB=C:\ProgramData\meridian-briefing\state.json`
+(`mkdir` it), restart, retest. If C: works → `E:` volume is the culprit (research that). If C: ALSO
+fails → it's the PS write logic / HTTP.sys / something else (research that instead). This single test
+bisects environmental-vs-code.
+
+**Then research** (Reddit / MS Q&A / docs) the signature: "Windows file written then not immediately
+readable / file content differs between consecutive reads / `System.IO.File.Replace` not committing /
+PowerShell `HttpListener` state file"; and candidate code fixes if it's not the drive: replace the
+atomic `Replace`/`Move` with an explicit `FileStream` write + `Flush($true)` (flush-to-disk) and/or
+drop the `.tmp` indirection; verify `[System.IO.File]::ReadAllText` isn't hitting a stale handle.
+
+**Resume recipe:** read this section + `deploy/server.ps1` (esp. `Write-State`, `Read-State`,
+`Normalize-State`, `Handle-AdminCreate`, and the `Log-Debug` lines). To reproduce on the box:
+`git pull` → remove `state.json*` + `server-debug.log` → run the server foreground → InPrivate
+`/admin` → log in → **+ New draft → Create draft** → edit a field → `Get-Content …\server-debug.log -Raw`.
+The temp diagnostics (`Log-Debug`, the `WRITE/CREATE/PATCH/LIST/AUTH` lines, `server-error.log`)
+are intentionally still in `server.ps1` — **leave them until this is resolved, then revert** (commits
+`f9da5fb`→`5fb0947`→`a334fb5`→`bf1e74a` added them; the `e98f1a3` key-fix should stay).
+
+---
+
+## Status: v1 Phase 1 complete (Linux scaffold + GitHub); PS deploy blocked (see above)
 
 Built, tested locally, pushed to GitHub. **Not yet deployed** to orange device
 (Phase 2) or CR DEV server (Phase 3) — those need Noah's physical access.
