@@ -30,21 +30,47 @@ contents differ between two reads ms apart with no writer between them.
 - Filesystem permissions / admin rights — writes succeed (state.json is created with content); a perms
   block would throw → 500 in `server-error.log`, which does NOT exist (no exceptions thrown).
 
-**Leading hypothesis:** an environmental idiosyncrasy of the `E:` volume — non-atomic / delayed-commit
-write semantics, or an AV/DLP/sync filter intercepting the temp-file→`[System.IO.File]::Replace`/`Move`
-shuffle — yielding non-deterministic reads. The phantom id is unexplained by app code. NOT yet
-confirmed; the in-memory `-SelfTest` (no disk) passes, which is consistent with a disk/FS-layer cause.
+**Drive bisect DONE (2026-06-03):** moved `BRIEFING_DB` to `C:\ProgramData\meridian-briefing\state.json`
+— **identical failure.** So it is **NOT the `E:` volume / AV / DLP / sync** — the environmental
+hypothesis is dead. The bug is **drive-independent → it's in the PowerShell data logic** (or a
+Windows-PowerShell-5.1 value-semantics behavior). `wroteIds=[]` is computed from the in-memory `$next`
+(= `Normalize-State $state`) BEFORE any disk read, so the editions are being lost **in memory**, not on disk.
 
-**Decisive next experiment (cheap, do FIRST next session):** set `BRIEFING_DB=C:\ProgramData\meridian-briefing\state.json`
-(`mkdir` it), restart, retest. If C: works → `E:` volume is the culprit (research that). If C: ALSO
-fails → it's the PS write logic / HTTP.sys / something else (research that instead). This single test
-bisects environmental-vs-code.
+**Leading hypothesis (now):** a PowerShell 5.1 value-semantics bug in the editions array handling —
+`Normalize-State` / `Get-Prop` / `To-Array` / the `@($eds + , $draft)` build, around
+`OrderedDictionary` + single-element-array + **function-return unwrapping** (PS unwraps a 1-element
+array returned from a function to a scalar; `Get-Prop` returns `$o['editions']` which may unwrap; and
+`@($orderedDict)` vs enumeration behaves differently for `OrderedDictionary` than `[hashtable]`). The
+in-memory `-SelfTest` passes because its final assert reads JSON-round-tripped **PSCustomObject**
+editions, NOT the raw `OrderedDictionary` editions the create path uses — so it doesn't exercise the
+broken path. (Can't be confirmed from the Linux dev box — no Windows PowerShell 5.1 to run it.)
 
-**Then research** (Reddit / MS Q&A / docs) the signature: "Windows file written then not immediately
-readable / file content differs between consecutive reads / `System.IO.File.Replace` not committing /
-PowerShell `HttpListener` state file"; and candidate code fixes if it's not the drive: replace the
-atomic `Replace`/`Move` with an explicit `FileStream` write + `Flush($true)` (flush-to-disk) and/or
-drop the `.tmp` indirection; verify `[System.IO.File]::ReadAllText` isn't hitting a stale handle.
+**KILLER next diagnostic (do FIRST next session, needs Windows PS 5.1):** an isolated repro that tests
+the data logic with NO HTTP/server/browser — build state exactly as `Handle-AdminCreate` does and watch
+where the edition vanishes. Sketch:
+```powershell
+# from the repo; extract the helpers or add a `-DataTest` switch to server.ps1 that runs this:
+$state = Read-State                                   # fresh/empty store
+"A getProp:    " + (@(To-Array (Get-Prop $state 'editions')).Count)      # expect 0
+$eds = @(To-Array (Get-Prop $state 'editions'))
+$draft = Blank-Edition '2026-06-03' 'T'
+"B draft id:   " + $draft['id']
+$state['editions'] = @($eds + , $draft)
+"C set dot:    " + (@($state['editions']).Count)                          # expect 1  <-- if 0, the build/assign is the bug
+"D getProp:    " + (@(To-Array (Get-Prop $state 'editions')).Count)       # expect 1  <-- if 0, Get-Prop/To-Array unwrap is the bug
+$next = Normalize-State $state
+"E normalized: " + (@(To-Array (Get-Prop $next 'editions')).Count)        # expect 1  <-- if 0, Normalize-State is the bug
+```
+Whichever letter first prints 0 names the exact broken operation. This bisects in <2 min without the
+browser/port/FS in the picture.
+
+**Then research** PS-5.1-specific pitfalls: "PowerShell OrderedDictionary `@()` enumerates DictionaryEntry",
+"PowerShell function return unwraps single-element array", "PowerShell ConvertTo-Json single element array",
+"`$dict['key'] = @(...)` value lost". **Candidate fixes:** (a) switch the in-memory model from `[ordered]`
+to `[hashtable]` (special-cased by PS, doesn't enumerate) or to PSCustomObjects throughout; (b) make every
+array-returning helper use `Write-Output -NoEnumerate` / `, $arr` consistently AND re-wrap with `@()` at
+every call site; (c) if PS value-semantics keep biting, reconsider the runtime entirely — getting Node
+onto the box, or a tiny self-contained static binary, may be less total effort than hardening PS.
 
 **Resume recipe:** read this section + `deploy/server.ps1` (esp. `Write-State`, `Read-State`,
 `Normalize-State`, `Handle-AdminCreate`, and the `Log-Debug` lines). To reproduce on the box:
