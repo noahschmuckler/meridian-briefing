@@ -4,6 +4,37 @@ High-density status for picking up work in a fresh session. Pairs with CLAUDE.md
 (conventions/locked decisions) and `~/.claude/plans/meridian-briefing-v1.md`
 (original plan).
 
+## ⚠️ FOLLOW-ON (2026-06-03): edition-drop FIXED + confirmed; now PATCH (autosave) returns 500
+
+The `@(To-Array …)` double-wrap fix below is **confirmed on the box** (commit `830b3ca`):
+`-DataTest` A–G all green, `-SelfTest` PASS, and `server-debug.log` now shows the data layer
+working — `WRITE wroteIds=[ed_…b868] reReadIds=[ed_…b868]`, `CREATE persistedIds=[ed_…b868]`,
+`LIST returns ids=[ed_…b868]` (ONE edition, no phantom), and the autosave
+`PATCH reqId=ed_…b868 matchIdx=0 availIds=[ed_…b868]` (was `matchIdx=-1`). The original bug is dead.
+
+**But the live editor still shows "Save failed — retry edit"** on autosave. Root cause is now a
+*different*, downstream bug: the PATCH matches the edition (`matchIdx=0`) but then **throws before
+`Write-State` logs its `WRITE` line** — i.e. somewhere in `Handle-AdminPatch` lines 618–625
+(`Clone-Props` → field merge → `Normalize-Edition $merged` → `$eds[$idx]=` → `Write-State`). The
+top-level request catch (server.ps1 ~849) turns it into a **500**, and the client
+(`public/briefing.js:542`, `flushSave`) shows "Save failed" on any non-2xx.
+
+**The differentiator vs the working CREATE path:** CREATE serializes a `Blank-Edition` (pure
+`[ordered]` dicts); PATCH merges the JSON request body, whose nested values (`issue`, the
+`leftAdvisories`/`topEvents`/`initiatives`/`footerLinks` arrays) are **`ConvertFrom-Json`
+PSCustomObjects**. The throw is almost certainly `Normalize-Edition` or `Write-BriefingJson`
+choking on one of those nested PSCustomObjects. (Reasoned through the whole path; no obvious
+thrower found by inspection — need the actual exception.)
+
+**NEXT (do FIRST): read the exact exception.** The main loop already logs type+line+stack:
+```
+Get-Content E:\noahs\meridian-briefing\server-error.log -Tail 40
+```
+The `At:` / `Stack:` lines name the exact statement → one-line fix. (server-error.log did NOT exist
+during the old bug because nothing threw then; it exists now.)
+
+---
+
 ## ✅ RESOLVED (2026-06-03): PowerShell edition-drop bug — root cause was the `@(To-Array …)` double-wrap
 
 Branch `noah/powershell-server` (PR #1). The PowerShell port (`deploy/server.ps1`) wouldn't persist
