@@ -403,6 +403,16 @@ function Get-EnvOr([string]$key, $default) {
 
 function Test-AdminConfigured { return ([bool]$script:AdminHash -and [bool]$script:AdminSalt) }
 
+# TEMP diagnostic logging — appends to server-debug.log + echoes to console.
+# Remove once the 401/404 cause is found.
+function Log-Debug([string]$msg) {
+  try {
+    $line = '[{0}] {1}' -f (Get-Date).ToString('HH:mm:ss'), $msg
+    Add-Content -LiteralPath (Join-Path $script:RepoRoot 'server-debug.log') -Value $line
+    Write-Host $line -ForegroundColor DarkCyan
+  } catch { }
+}
+
 # ---------- HTTP send helpers ----------
 
 function Send-Bytes($res, [int]$status, [byte[]]$bytes, [string]$contentType, [string[]]$setCookie) {
@@ -510,7 +520,9 @@ function Handle-Login($req, $res) {
   $ok = Test-AdminPassword ([string](Get-Prop $body 'password')) $script:AdminHash $script:AdminSalt
   if (-not $ok) { Send-Json $res 401 ([ordered]@{ error = 'wrong password' }); return }
   $id = New-Session
-  Send-Json $res 200 ([ordered]@{ ok = $true }) @(Cookie-SetHeader $id $script:TtlDays)
+  $cookieHdr = Cookie-SetHeader $id $script:TtlDays
+  Log-Debug ("LOGIN ok sid={0} sessions={1} setCookie='{2}'" -f $id.Substring(0, 8), $script:Sessions.Count, $cookieHdr)
+  Send-Json $res 200 ([ordered]@{ ok = $true }) @($cookieHdr)
 }
 
 function Handle-Logout($req, $res) {
@@ -563,6 +575,8 @@ function Handle-AdminCreate($req, $res) {
   }
   $state.editions = @($eds + , $draft)
   Write-State $state | Out-Null
+  $persisted = (To-Array (Get-Prop (Read-State) 'editions') | ForEach-Object { Get-Prop $_ 'id' }) -join ','
+  Log-Debug ("CREATE template_from='{0}' returnedId={1} persistedIds=[{2}]" -f $from, $draft['id'], $persisted)
   Send-Json $res 201 ([ordered]@{ id = $draft['id']; edition = $draft })
 }
 
@@ -574,6 +588,8 @@ function Handle-AdminPatch($req, $res, [string]$id) {
   $eds = @(To-Array (Get-Prop $state 'editions'))
   $idx = -1
   for ($i = 0; $i -lt $eds.Count; $i++) { if ((Get-Prop $eds[$i] 'id') -eq $id) { $idx = $i; break } }
+  $availIds = ($eds | ForEach-Object { Get-Prop $_ 'id' }) -join ','
+  Log-Debug ("PATCH reqId={0} matchIdx={1} availIds=[{2}]" -f $id, $idx, $availIds)
   if ($idx -lt 0) { Send-Json $res 404 ([ordered]@{ error = 'not found' }); return }
   $merged = Clone-Props $eds[$idx]
   foreach ($k in $script:Patchable) {
@@ -632,7 +648,12 @@ function Handle-Request($req, $res) {
 
   # everything else under /api/admin/ is gated
   if ($pathname.StartsWith('/api/admin/')) {
-    if (-not (Test-Session (Get-SessionCookie $req))) { Send-Json $res 401 ([ordered]@{ error = 'unauthorized' }); return }
+    $sidDbg = Get-SessionCookie $req
+    $sidShort = if ($sidDbg) { $sidDbg.Substring(0, [Math]::Min(8, $sidDbg.Length)) } else { '<none>' }
+    $rawCookie = $req.Headers['Cookie']
+    $authOk = Test-Session $sidDbg
+    Log-Debug ("AUTH {0} {1} rawCookie='{2}' sid={3} known={4} sessions={5}" -f $method, $pathname, $rawCookie, $sidShort, $authOk, $script:Sessions.Count)
+    if (-not $authOk) { Send-Json $res 401 ([ordered]@{ error = 'unauthorized' }); return }
     if ($pathname -eq '/api/admin/editions' -and $method -eq 'GET') { Handle-AdminList $req $res; return }
     if ($pathname -eq '/api/admin/editions' -and $method -eq 'POST') { Handle-AdminCreate $req $res; return }
     $pub = [regex]::Match($pathname, '^/api/admin/editions/([^/]+)/publish$')
