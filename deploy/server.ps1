@@ -581,7 +581,7 @@ function Handle-AdminCreate($req, $res) {
   } else {
     $draft = Blank-Edition (Get-Prop $body 'date') (Get-Prop $body 'title')
   }
-  $state.editions = @($eds + , $draft)
+  $state['editions'] = @($eds + , $draft)
   Write-State $state | Out-Null
   $persisted = (@(To-Array (Get-Prop (Read-State) 'editions')) | ForEach-Object { Get-Prop $_ 'id' }) -join ','
   Log-Debug ("CREATE template_from='{0}' returnedId={1} persistedIds=[{2}]" -f $from, $draft['id'], $persisted)
@@ -605,7 +605,7 @@ function Handle-AdminPatch($req, $res, [string]$id) {
   }
   $norm = Normalize-Edition $merged
   $eds[$idx] = $norm
-  $state.editions = @($eds)
+  $state['editions'] = @($eds)
   Write-State $state | Out-Null
   Send-Json $res 200 $norm
 }
@@ -619,9 +619,9 @@ function Handle-AdminPublish($req, $res, [string]$id) {
   if (-not $ed) { Send-Json $res 404 ([ordered]@{ error = 'not found' }); return }
   $ed['published'] = [bool]$wantPub
   if ($wantPub) { $ed['published_at'] = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffK") } else { $ed['published_at'] = $null }
-  $state.editions = @($eds)
-  $state.current_edition_id = Recompute-CurrentId $state
-  $cid = $state.current_edition_id
+  $state['editions'] = @($eds)
+  $state['current_edition_id'] = Recompute-CurrentId $state
+  $cid = $state['current_edition_id']
   Write-State $state | Out-Null
   Send-Json $res 200 ([ordered]@{ edition = $ed; current_edition_id = $cid })
 }
@@ -632,8 +632,8 @@ function Handle-AdminDelete($req, $res, [string]$id) {
   $ed = $eds | Where-Object { (Get-Prop $_ 'id') -eq $id } | Select-Object -First 1
   if (-not $ed) { Send-Json $res 404 ([ordered]@{ error = 'not found' }); return }
   if ((Get-Prop $ed 'published') -eq $true) { Send-Json $res 409 ([ordered]@{ error = 'un-publish before deleting' }); return }
-  $state.editions = @($eds | Where-Object { (Get-Prop $_ 'id') -ne $id })
-  $state.current_edition_id = Recompute-CurrentId $state
+  $state['editions'] = @($eds | Where-Object { (Get-Prop $_ 'id') -ne $id })
+  $state['current_edition_id'] = Recompute-CurrentId $state
   Write-State $state | Out-Null
   Send-Json $res 200 ([ordered]@{ ok = $true })
 }
@@ -697,13 +697,14 @@ function Invoke-SelfTest {
 
   # Round-trip a 1-edition / 1-advisory doc through normalize + serialize.
   $st = Empty-State
-  $st.editions = @((Blank-Edition '2026-06-03' 'Self Test'))
+  $st['editions'] = @((Blank-Edition '2026-06-03' 'Self Test'))
   $norm = Normalize-State $st
   $json = Write-BriefingJson $norm 0
   $back = $json | ConvertFrom-Json
   $reNorm = Normalize-State $back
-  if ((To-Array $reNorm.editions).Count -ne 1) { Write-Host 'SELFTEST FAIL: edition count changed on round-trip.' -ForegroundColor Red; exit 1 }
-  if ((To-Array ((To-Array $reNorm.editions)[0].leftAdvisories)).Count -ne 1) { Write-Host 'SELFTEST FAIL: single advisory lost on round-trip.' -ForegroundColor Red; exit 1 }
+  $reEds = @(To-Array (Get-Prop $reNorm 'editions'))
+  if ($reEds.Count -ne 1) { Write-Host 'SELFTEST FAIL: edition count changed on round-trip.' -ForegroundColor Red; exit 1 }
+  if ((@(To-Array (Get-Prop $reEds[0] 'leftAdvisories'))).Count -ne 1) { Write-Host 'SELFTEST FAIL: single advisory lost on round-trip.' -ForegroundColor Red; exit 1 }
 
   Write-Host 'SELFTEST PASS: PBKDF2 vector + JSON array invariants + normalize round-trip.' -ForegroundColor Green
   exit 0
