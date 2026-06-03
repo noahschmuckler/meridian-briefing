@@ -309,8 +309,20 @@ function Write-State($state) {
   $tmp = "$path.tmp"
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
   [System.IO.File]::WriteAllText($tmp, $json, $utf8NoBom)
+  # Promote temp -> real path. Prefer File.Replace (atomic on NTFS, crash-safe),
+  # but pass a REAL backup path: a $null backup throws "The path is not of a
+  # legal form" on this box's .NET, which silently broke every write-over-an-
+  # existing-file (2026-06-03). If Replace is unsupported on the volume, fall
+  # back to delete+move -- safe because the server handles one request at a time.
   if (Test-Path -LiteralPath $path -PathType Leaf) {
-    [System.IO.File]::Replace($tmp, $path, $null) # atomic on NTFS
+    $bak = "$path.bak"
+    try {
+      [System.IO.File]::Replace($tmp, $path, $bak)
+    } catch {
+      if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path -Force }
+      [System.IO.File]::Move($tmp, $path)
+    }
+    if (Test-Path -LiteralPath $bak -PathType Leaf) { Remove-Item -LiteralPath $bak -Force -ErrorAction SilentlyContinue }
   } else {
     [System.IO.File]::Move($tmp, $path)
   }

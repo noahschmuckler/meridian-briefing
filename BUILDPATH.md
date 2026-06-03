@@ -4,34 +4,30 @@ High-density status for picking up work in a fresh session. Pairs with CLAUDE.md
 (conventions/locked decisions) and `~/.claude/plans/meridian-briefing-v1.md`
 (original plan).
 
-## ⚠️ FOLLOW-ON (2026-06-03): edition-drop FIXED + confirmed; now PATCH (autosave) returns 500
+## ✅ FOLLOW-ON FIXED (2026-06-03): writes over an existing state.json threw `File.Replace` "path not of a legal form"
 
-The `@(To-Array …)` double-wrap fix below is **confirmed on the box** (commit `830b3ca`):
-`-DataTest` A–G all green, `-SelfTest` PASS, and `server-debug.log` now shows the data layer
-working — `WRITE wroteIds=[ed_…b868] reReadIds=[ed_…b868]`, `CREATE persistedIds=[ed_…b868]`,
-`LIST returns ids=[ed_…b868]` (ONE edition, no phantom), and the autosave
-`PATCH reqId=ed_…b868 matchIdx=0 availIds=[ed_…b868]` (was `matchIdx=-1`). The original bug is dead.
+After the `@(To-Array …)` data fix landed (confirmed: `-DataTest` A–G green, `-SelfTest` PASS,
+`server-debug.log` shows `wroteIds`/`persistedIds`/`LIST`/`PATCH matchIdx=0` all correct), the live
+editor still showed "Save failed". `server-error.log` named the real cause:
+`Exception calling "Replace" with "3" argument(s): "The path is not of a legal form."` at
+`Write-State` line 313 — i.e. **`[System.IO.File]::Replace($tmp, $path, $null)`**. A `$null` backup
+arg makes `File.Replace` throw on this box's .NET. The earlier log entries show
+`Handle-AdminCreate` threw the *same* exception whenever `state.json` already existed — so this
+silently broke **every write over an existing file** (CREATE-of-2nd-edition, publish, delete,
+autosave-PATCH). The only write that ever worked was the very first CREATE on a freshly-deleted
+store, because that took the `Move` (new-file) branch.
 
-**But the live editor still shows "Save failed — retry edit"** on autosave. Root cause is now a
-*different*, downstream bug: the PATCH matches the edition (`matchIdx=0`) but then **throws before
-`Write-State` logs its `WRITE` line** — i.e. somewhere in `Handle-AdminPatch` lines 618–625
-(`Clone-Props` → field merge → `Normalize-Edition $merged` → `$eds[$idx]=` → `Write-State`). The
-top-level request catch (server.ps1 ~849) turns it into a **500**, and the client
-(`public/briefing.js:542`, `flushSave`) shows "Save failed" on any non-2xx.
+**Fix (commit pending):** `Write-State` now calls `File.Replace($tmp, $path, $bak)` with a REAL
+backup path (preserving atomic-on-NTFS) and removes the `.bak` after; if `Replace` throws (volume
+doesn't support it), it falls back to delete-then-`Move` — safe because the server is single-
+threaded (one request at a time). Not the data layer, not auth — purely the temp-file promotion.
 
-**The differentiator vs the working CREATE path:** CREATE serializes a `Blank-Edition` (pure
-`[ordered]` dicts); PATCH merges the JSON request body, whose nested values (`issue`, the
-`leftAdvisories`/`topEvents`/`initiatives`/`footerLinks` arrays) are **`ConvertFrom-Json`
-PSCustomObjects**. The throw is almost certainly `Normalize-Edition` or `Write-BriefingJson`
-choking on one of those nested PSCustomObjects. (Reasoned through the whole path; no obvious
-thrower found by inspection — need the actual exception.)
+**CONFIRM ON THE BOX:** `git pull`, restart server, edit a field → autosave should show "Saved";
+create a 2nd edition → should persist; `server-error.log` should get no new entries.
 
-**NEXT (do FIRST): read the exact exception.** The main loop already logs type+line+stack:
-```
-Get-Content E:\noahs\meridian-briefing\server-error.log -Tail 40
-```
-The `At:` / `Stack:` lines name the exact statement → one-line fix. (server-error.log did NOT exist
-during the old bug because nothing threw then; it exists now.)
+(If save now works: this completes the PS-server blocker. Remaining = revert the temp diagnostics
+per the "AFTER CONFIRMATION" note below, then PR #1 is mergeable. Two cosmetic editor issues remain,
+unrelated to save: masthead renders `&amp;` literally; the top-events card renders text vertically.)
 
 ---
 
