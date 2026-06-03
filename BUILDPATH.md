@@ -4,6 +4,24 @@ High-density status for picking up work in a fresh session. Pairs with CLAUDE.md
 (conventions/locked decisions) and `~/.claude/plans/meridian-briefing-v1.md`
 (original plan).
 
+## 🚢 SHIPPED + LIVE (2026-06-03): PowerShell server in production on the CR DEV box
+
+PR #1 (`noah/powershell-server`) squash-merged to `main`. The briefing is **live in-network at
+`cdseastdev.ms.ds.uhc.com:8080`** via Path 1 (retired the `meridian-os-saw` POC IIS site, ran
+`server.ps1` directly on :8080 as a SYSTEM startup task — no Billy, no ARR, HTTP same as saw).
+Save/create/publish all confirmed working. Temp diagnostics reverted (kept the real fixes + the
+hardened 0/1/2-edition `-SelfTest` + the exception-only `server-error.log` handler). Branding updated
+to **Optum NY/NJ** (region-wide; replaced "Crystal Run Healthcare" in masthead/footer); the `&amp;`
+entity fix shipped in `2bb0c08`.
+
+**On Noah's return:** resync the server's working copy from `noah/powershell-server` → `main`
+(`git fetch origin && git checkout main && git pull`) and restart the `BriefingServer` task so the
+live box runs the merged, diagnostics-free build (this also picks up the `&amp;` + Optum NY/NJ fixes).
+Then clear the test editions from the live `state.json` (via `/admin`) before wider announcement.
+Remaining roadmap: Phase 2 (orange device) if still wanted; otherwise the v1 deploy is done.
+
+The detailed debugging history below (edition-drop + File.Replace) is retained for reference.
+
 ## ✅ FOLLOW-ON FIXED (2026-06-03): writes over an existing state.json threw `File.Replace` "path not of a legal form"
 
 After the `@(To-Array …)` data fix landed (confirmed: `-DataTest` A–G green, `-SelfTest` PASS,
