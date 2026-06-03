@@ -4,84 +4,56 @@ High-density status for picking up work in a fresh session. Pairs with CLAUDE.md
 (conventions/locked decisions) and `~/.claude/plans/meridian-briefing-v1.md`
 (original plan).
 
-## ⚠️ ACTIVE BLOCKER (2026-06-03): PowerShell server doesn't persist edition writes on the E: dev box
+## ✅ RESOLVED (2026-06-03): PowerShell edition-drop bug — root cause was the `@(To-Array …)` double-wrap
 
-Branch `noah/powershell-server` (PR #1). The PowerShell port (`deploy/server.ps1`)
-runs on Noah's enterprise Windows box (drive `E:`, `BRIEFING_DB=E:\meridian-briefing-data\state.json`,
-`HOST=127.0.0.1 PORT=8788`, foreground via `powershell -File deploy\server.ps1`).
-`-SelfTest` PASSES. Login/auth/static all work. **But creating/saving an edition never persists.**
+Branch `noah/powershell-server` (PR #1). The PowerShell port (`deploy/server.ps1`) wouldn't persist
+edition writes: `POST /api/admin/editions` returned a real id but `WRITE … wroteIds=[]`, a phantom 2nd
+edition appeared, and autosave `PATCH` 404'd with `matchIdx=-1 availIds=[]`. `-SelfTest` passed; auth /
+static / read all worked. **Found via the `-DataTest` probe; fixed; pending on-box confirmation.**
 
-**Symptom (from the temp `server-debug.log` instrumentation, still in the code):**
-on `POST /api/admin/editions` the create returns a real id but `WRITE … wroteIds=[] reReadIds=[]`
-— i.e. `Normalize-State` produced an empty `editions` and the file re-read right after the
-atomic write is also empty. Then milliseconds later, same single-threaded process, `LIST returns
-ids=[ed_…X, ed_…Y]` — **a phantom 2nd edition appears that no logged `WRITE` created** — and the
-subsequent autosave `PATCH` gets `matchIdx=-1 availIds=[]` → **404 "save failed."** The file's
-contents differ between two reads ms apart with no writer between them.
+**ROOT CAUSE (confirmed by `-DataTest` on PS 5.1.26100, screenshot 2026-06-03).** `To-Array` is correct —
+it returns a comma-protected array as a *single* pipeline item (`return , @($v)`). But almost every call
+site wrapped it again: `@(To-Array (Get-Prop … 'editions'))`. That `@(…)` adds a second layer, producing
+a one-element array whose only element is the real array — so **`@(To-Array X).Count` is ALWAYS 1**,
+regardless of the real contents. The probe nailed it: `@(To-Array 2-elem)` → 1 (want 2); `@(To-Array
+empty)` → 1 (want 0); the 1-element case → 1 only *by luck* (which is why the single-edition `-SelfTest`
+never caught it). Cascade:
+- **Empty editions** → `$eds` = `[ @() ]` → `@($eds + ,$draft)` = `[ @(), $draft ]`; the empty-array
+  element becomes a **phantom edition** (gets a fresh id in `Normalize-Edition`).
+- **PATCH `matchIdx=-1`** → `$eds[0]` was the inner array, not an edition, so `Get-Prop $_ 'id'` = null,
+  never matched.
+- **`wroteIds=[]`** → the WRITE log line itself used `@(To-Array X) | ForEach` (same bug), piping the
+  array as one item → ids resolved to null. The log was lying; the write wasn't actually empty.
+- **`-SelfTest` passed** → it only round-tripped ONE edition, the one case where `@(To-Array)`→1 is right.
 
-**Ruled OUT (each verified, don't re-chase):**
-- Auth/session/cookie — `AUTH … known=True sessions=1` after login; PATCH passes the gate (404, not 401).
-- OrderedDictionary member-vs-key assignment — fixed in `e98f1a3` (all writes use `$state['editions']=`),
-  confirmed running (`git log` HEAD = `e98f1a3`); `wroteIds=[]` STILL occurs.
-- Multiple/zombie servers — killed all `server.ps1` procs + removed any `BriefingServer` scheduled
-  task; `Get-NetTCPConnection -LocalPort 8788` confirmed empty before starting exactly one server.
-- Stale browser — reproduced in a fresh InPrivate tab.
-- Corrupt/malformed `state.json` — file is valid JSON; reads parse fine (read view + LIST work).
-- Filesystem permissions / admin rights — writes succeed (state.json is created with content); a perms
-  block would throw → 500 in `server-error.log`, which does NOT exist (no exceptions thrown).
+Earlier hypotheses (OrderedDictionary `@()` enumeration, function single-element unwrap, drive/AV/DLP,
+auth, zombies) were all correctly ruled out — none was the cause.
 
-**Drive bisect DONE (2026-06-03):** moved `BRIEFING_DB` to `C:\ProgramData\meridian-briefing\state.json`
-— **identical failure.** So it is **NOT the `E:` volume / AV / DLP / sync** — the environmental
-hypothesis is dead. The bug is **drive-independent → it's in the PowerShell data logic** (or a
-Windows-PowerShell-5.1 value-semantics behavior). `wroteIds=[]` is computed from the in-memory `$next`
-(= `Normalize-State $state`) BEFORE any disk read, so the editions are being lost **in memory**, not on disk.
+**THE FIX (commit pending push):** the bare form `$eds = To-Array (…)` is correct everywhere (the comma
+already protects it). Changes in `deploy/server.ps1`:
+- Removed the `@()` wrapper from all four product call sites (Create/Patch/Publish/Delete).
+- Added `Get-EdIds $container` (bare-`To-Array` + `foreach` join) and used it in the WRITE/CREATE logs so
+  the diagnostics tell the truth.
+- Loud "**CALL IT BARE — never `@(To-Array …)`**" warning on `To-Array`.
+- `-SelfTest` now round-trips **0 / 1 / 2** editions (the 0 and 2 cases are the permanent regression
+  guard; the old test only checked 1).
+- `-DataTest` rewritten as a fix-confirmation tool (A–G): a BUG-vs-FIX demo line, the create path, a
+  second-edition (phantom/PATCH) boundary, and a JSON round-trip — all should be green except the
+  intentional `BUG` line (stays 1 by design).
 
-**Leading hypothesis (now):** a PowerShell 5.1 value-semantics bug in the editions array handling —
-`Normalize-State` / `Get-Prop` / `To-Array` / the `@($eds + , $draft)` build, around
-`OrderedDictionary` + single-element-array + **function-return unwrapping** (PS unwraps a 1-element
-array returned from a function to a scalar; `Get-Prop` returns `$o['editions']` which may unwrap; and
-`@($orderedDict)` vs enumeration behaves differently for `OrderedDictionary` than `[hashtable]`). The
-in-memory `-SelfTest` passes because its final assert reads JSON-round-tripped **PSCustomObject**
-editions, NOT the raw `OrderedDictionary` editions the create path uses — so it doesn't exercise the
-broken path. (Can't be confirmed from the Linux dev box — no Windows PowerShell 5.1 to run it.)
-
-**KILLER next diagnostic — NOW WIRED as `-DataTest` (do FIRST next session, needs Windows PS 5.1):**
-an isolated repro that tests the data logic with NO HTTP/server/browser/disk-write — it builds state
-exactly as `Handle-AdminCreate` does and prints what it observes at every step. Run it on the box:
+**CONFIRM ON THE BOX (Noah, next session):**
 ```
 git pull
-powershell -ExecutionPolicy Bypass -File deploy\server.ps1 -DataTest
+powershell -ExecutionPolicy Bypass -File deploy\server.ps1 -DataTest    # expect A-G all green
+powershell -ExecutionPolicy Bypass -File deploy\server.ps1 -SelfTest    # expect SELFTEST PASS
+# then real server: remove state.json* + server-debug.log, run foreground, InPrivate /admin,
+# log in, + New draft -> Create draft, edit a field; LIST should show ONE id, autosave should 200.
 ```
-It prints colored lines; **the first red COUNT names the exact broken operation.** Sections:
-- **M1-M4** — isolated PS-5.1 value-semantics micro-probes independent of our helpers: does `@($orderedDict)`
-  enumerate to DictionaryEntry (M1)? does a function unwrap a 1-elem array on return (M2)? does `Get-Prop`
-  unwrap a 1-elem editions array (M3)? does the 2-elem boundary survive (M4)? These pin the *mechanism*.
-- **A-E** — replays the create path on a fresh empty state: start count (A) -> `$eds` (A2) -> `Blank-Edition`
-  (B) -> the `@($eds + ,$draft)` assign (C) -> `Get-Prop`/`To-Array` read-back (D) -> `Normalize-State`
-  broken into its 3 internal steps (E1 inner read, E2 the foreach, E final). Whichever letter first reads 0
-  is the culprit line.
-- **F** — runs the JSON round-trip path that `-SelfTest` exercises (and PASSES), for direct contrast: if F is
-  green but E is red, that *confirms* the bug is specific to the raw-OrderedDictionary create path the
-  SelfTest never touches.
 
-(The probe body is `Invoke-DataTest` in `server.ps1`, just above `Invoke-SelfTest`. Pure in-memory, no
-disk writes, safe to run anytime. Remove it with the other temp diagnostics once the bug is fixed.)
-
-**Then research** PS-5.1-specific pitfalls: "PowerShell OrderedDictionary `@()` enumerates DictionaryEntry",
-"PowerShell function return unwraps single-element array", "PowerShell ConvertTo-Json single element array",
-"`$dict['key'] = @(...)` value lost". **Candidate fixes:** (a) switch the in-memory model from `[ordered]`
-to `[hashtable]` (special-cased by PS, doesn't enumerate) or to PSCustomObjects throughout; (b) make every
-array-returning helper use `Write-Output -NoEnumerate` / `, $arr` consistently AND re-wrap with `@()` at
-every call site; (c) if PS value-semantics keep biting, reconsider the runtime entirely — getting Node
-onto the box, or a tiny self-contained static binary, may be less total effort than hardening PS.
-
-**Resume recipe:** read this section + `deploy/server.ps1` (esp. `Write-State`, `Read-State`,
-`Normalize-State`, `Handle-AdminCreate`, and the `Log-Debug` lines). To reproduce on the box:
-`git pull` → remove `state.json*` + `server-debug.log` → run the server foreground → InPrivate
-`/admin` → log in → **+ New draft → Create draft** → edit a field → `Get-Content …\server-debug.log -Raw`.
-The temp diagnostics (`Log-Debug`, the `WRITE/CREATE/PATCH/LIST/AUTH` lines, `server-error.log`)
-are intentionally still in `server.ps1` — **leave them until this is resolved, then revert** (commits
-`f9da5fb`→`5fb0947`→`a334fb5`→`bf1e74a` added them; the `e98f1a3` key-fix should stay).
+**AFTER CONFIRMATION — revert the temp diagnostics** (keep the real fix). Remove: the `-DataTest` switch +
+`Invoke-DataTest`, the `Log-Debug` calls + `WRITE/CREATE/PATCH/LIST/AUTH` lines + `server-error.log`
+(added in `f9da5fb`→`5fb0947`→`a334fb5`→`bf1e74a`). **KEEP:** the `e98f1a3` key-fix, the `@()`-removal
+call-site fixes, `Get-EdIds`, the hardened 0/1/2 `-SelfTest`, and the `To-Array` warning comment.
 
 ---
 

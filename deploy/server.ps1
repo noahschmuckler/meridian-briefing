@@ -65,6 +65,13 @@ function Str($v, $fallback = '') {
 
 # Always returns an array (object[]); $null/empty -> empty array, scalar ->
 # one-element array. The unary comma keeps PS from unwrapping on return.
+#
+# *** CALL IT BARE: `$x = To-Array $v`  -- NEVER `@(To-Array $v)`. ***
+# This function already returns a protected array as a SINGLE pipeline item.
+# Wrapping the call in @(...) (or piping it) adds a second layer -- you get a
+# one-element array whose only element is the real array, so .Count is always 1
+# and every element is lost. That double-wrap was the 2026-06-03 edition-drop
+# bug. To count/iterate, assign bare first, then use $x / @($x) / $x | ...
 function To-Array($v) {
   if ($null -eq $v) { return , @() }
   if ($v -is [string]) { return , @($v) }
@@ -90,6 +97,14 @@ function Get-Prop($o, [string]$name) {
     return $null
   }
   return $null
+}
+
+# Safe comma-joined edition ids for logging. Uses bare To-Array + foreach so it
+# never trips the @(To-Array ...) double-wrap (which made the WRITE log read []).
+function Get-EdIds($container) {
+  $acc = New-Object System.Collections.ArrayList
+  foreach ($e in (To-Array (Get-Prop $container 'editions'))) { [void]$acc.Add([string](Get-Prop $e 'id')) }
+  return ($acc -join ',')
 }
 
 # Shallow-copy any object's own properties into an ordered dictionary (handles
@@ -303,9 +318,9 @@ function Write-State($state) {
   $vIds = '<unread>'
   try {
     $vTxt = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
-    $vIds = (@(To-Array (Get-Prop ($vTxt | ConvertFrom-Json) 'editions')) | ForEach-Object { Get-Prop $_ 'id' }) -join ','
+    $vIds = Get-EdIds ($vTxt | ConvertFrom-Json)
   } catch { $vIds = "<reread-failed: $($_.Exception.Message)>" }
-  Log-Debug ("WRITE path={0} exists={1} wroteIds=[{2}] reReadIds=[{3}]" -f $path, (Test-Path -LiteralPath $path), ((@(To-Array (Get-Prop $next 'editions')) | ForEach-Object { Get-Prop $_ 'id' }) -join ','), $vIds)
+  Log-Debug ("WRITE path={0} exists={1} wroteIds=[{2}] reReadIds=[{3}]" -f $path, (Test-Path -LiteralPath $path), (Get-EdIds $next), $vIds)
   return $next
 }
 
@@ -562,7 +577,7 @@ function Handle-AdminGet($req, $res, [string]$id) {
 function Handle-AdminCreate($req, $res) {
   try { $body = Read-JsonBody $req } catch { Send-Json $res 400 ([ordered]@{ error = 'invalid JSON' }); return }
   $state = Read-State
-  $eds = @(To-Array (Get-Prop $state 'editions'))
+  $eds = To-Array (Get-Prop $state 'editions')
   $from = Get-Prop $body 'template_from'
   $src = $null
   if ($from -and $from -ne 'blank' -and $from -ne 'current') {
@@ -584,7 +599,7 @@ function Handle-AdminCreate($req, $res) {
   }
   $state['editions'] = @($eds + , $draft)
   Write-State $state | Out-Null
-  $persisted = (@(To-Array (Get-Prop (Read-State) 'editions')) | ForEach-Object { Get-Prop $_ 'id' }) -join ','
+  $persisted = Get-EdIds (Read-State)
   Log-Debug ("CREATE template_from='{0}' returnedId={1} persistedIds=[{2}]" -f $from, $draft['id'], $persisted)
   Send-Json $res 201 ([ordered]@{ id = $draft['id']; edition = $draft })
 }
@@ -594,7 +609,7 @@ $script:Patchable = @('date', 'title', 'issue', 'leftAdvisories', 'topEvents', '
 function Handle-AdminPatch($req, $res, [string]$id) {
   try { $body = Read-JsonBody $req } catch { Send-Json $res 400 ([ordered]@{ error = 'invalid JSON' }); return }
   $state = Read-State
-  $eds = @(To-Array (Get-Prop $state 'editions'))
+  $eds = To-Array (Get-Prop $state 'editions')
   $idx = -1
   for ($i = 0; $i -lt $eds.Count; $i++) { if ((Get-Prop $eds[$i] 'id') -eq $id) { $idx = $i; break } }
   $availIds = ($eds | ForEach-Object { Get-Prop $_ 'id' }) -join ','
@@ -615,7 +630,7 @@ function Handle-AdminPublish($req, $res, [string]$id) {
   try { $body = Read-JsonBody $req } catch { Send-Json $res 400 ([ordered]@{ error = 'invalid JSON' }); return }
   $wantPub = ((Get-Prop $body 'published') -ne $false) # default true
   $state = Read-State
-  $eds = @(To-Array (Get-Prop $state 'editions'))
+  $eds = To-Array (Get-Prop $state 'editions')
   $ed = $eds | Where-Object { (Get-Prop $_ 'id') -eq $id } | Select-Object -First 1
   if (-not $ed) { Send-Json $res 404 ([ordered]@{ error = 'not found' }); return }
   $ed['published'] = [bool]$wantPub
@@ -629,7 +644,7 @@ function Handle-AdminPublish($req, $res, [string]$id) {
 
 function Handle-AdminDelete($req, $res, [string]$id) {
   $state = Read-State
-  $eds = @(To-Array (Get-Prop $state 'editions'))
+  $eds = To-Array (Get-Prop $state 'editions')
   $ed = $eds | Where-Object { (Get-Prop $_ 'id') -eq $id } | Select-Object -First 1
   if (-not $ed) { Send-Json $res 404 ([ordered]@{ error = 'not found' }); return }
   if ((Get-Prop $ed 'published') -eq $true) { Send-Json $res 409 ([ordered]@{ error = 'un-publish before deleting' }); return }
@@ -696,16 +711,24 @@ function Invoke-SelfTest {
   $j0 = Write-BriefingJson (To-Array $null) 0
   if ($j0 -ne '[]') { Write-Host "SELFTEST FAIL: empty array rendered as '$j0'" -ForegroundColor Red; exit 1 }
 
-  # Round-trip a 1-edition / 1-advisory doc through normalize + serialize.
-  $st = Empty-State
-  $st['editions'] = @((Blank-Edition '2026-06-03' 'Self Test'))
-  $norm = Normalize-State $st
-  $json = Write-BriefingJson $norm 0
-  $back = $json | ConvertFrom-Json
-  $reNorm = Normalize-State $back
-  $reEds = @(To-Array (Get-Prop $reNorm 'editions'))
-  if ($reEds.Count -ne 1) { Write-Host 'SELFTEST FAIL: edition count changed on round-trip.' -ForegroundColor Red; exit 1 }
-  if ((@(To-Array (Get-Prop $reEds[0] 'leftAdvisories'))).Count -ne 1) { Write-Host 'SELFTEST FAIL: single advisory lost on round-trip.' -ForegroundColor Red; exit 1 }
+  # Round-trip 0/1/2-edition docs through normalize + serialize. The 0 and 2
+  # cases are the regression guard for the @(To-Array ...) double-wrap bug
+  # (2026-06-03) -- the old single-edition-only test passed it by luck.
+  foreach ($n in 0, 1, 2) {
+    $st = Empty-State
+    $seed = New-Object System.Collections.ArrayList
+    for ($i = 0; $i -lt $n; $i++) { [void]$seed.Add((Blank-Edition '2026-06-03' "Self Test $i")) }
+    $st['editions'] = @($seed.ToArray())
+    $norm = Normalize-State $st
+    $back = (Write-BriefingJson $norm 0) | ConvertFrom-Json
+    $reNorm = Normalize-State $back
+    $reEds = To-Array (Get-Prop $reNorm 'editions')   # bare: never @(To-Array ...)
+    if ($reEds.Count -ne $n) { Write-Host "SELFTEST FAIL: edition count $($reEds.Count) != $n after round-trip." -ForegroundColor Red; exit 1 }
+    if ($n -ge 1) {
+      $adv = To-Array (Get-Prop $reEds[0] 'leftAdvisories')
+      if ($adv.Count -ne 1) { Write-Host 'SELFTEST FAIL: single advisory lost on round-trip.' -ForegroundColor Red; exit 1 }
+    }
+  }
 
   Write-Host 'SELFTEST PASS: PBKDF2 vector + JSON array invariants + normalize round-trip.' -ForegroundColor Green
   exit 0
@@ -726,76 +749,53 @@ function Invoke-DataTest {
     Write-Host ("  {0,-58} {1}{2}" -f $label, $got, $tail) -ForegroundColor $color
   }
   function TypeName($v) { if ($null -eq $v) { return '<null>' } else { return $v.GetType().Name } }
+  # Cnt/Ids use the CORRECT idiom (bare To-Array, then measure). After the
+  # 2026-06-03 fix these should all match their 'want' values.
+  function Cnt($gp) { $a = To-Array $gp; return $a.Count }
+  function Ids($gp) { $acc = @(); foreach ($e in (To-Array $gp)) { $acc += [string](Get-Prop $e 'id') }; return ($acc -join ',') }
 
   Write-Host ''
   Write-Host ("DATATEST  PSVersion={0}  Edition={1}" -f $PSVersionTable.PSVersion, $PSVersionTable.PSEdition) -ForegroundColor $yellow
-  Write-Host '--- isolated PS-5.1 value-semantics micro-probes (independent of our helpers) ---' -ForegroundColor $yellow
-
+  Write-Host '--- root-cause demo: the @(To-Array x) double-wrap (the bug) vs bare (the fix) ---' -ForegroundColor $yellow
   $probe = [ordered]@{ id = 'x'; date = 'd'; title = 't' }
-
-  # M1: does @() enumerate an [ordered] dict into DictionaryEntry, or keep it as 1 object?
-  $m1 = @($probe)
-  P 'M1 @($orderedDict).Count' $m1.Count 1
-  P 'M1     element[0] type' (TypeName $m1[0]) 'OrderedDictionary'
-
-  # M2: does a function unwrap a 1-element array on return? (the unary-comma guard)
-  function _Ret-Comma { return , @($probe) }   # guarded
-  function _Ret-Plain { return @($probe) }     # unguarded
-  $r1 = _Ret-Comma; $r2 = _Ret-Plain
-  P 'M2 (,@(x)) return  -> @(_).Count' (@($r1).Count) 1
-  P 'M2  @(x)   return  -> @(_).Count' (@($r2).Count) 1
-  P 'M2  @(x)   return  -> [0] type' (TypeName (@($r2)[0])) 'OrderedDictionary'
-
-  # M3: does Get-Prop unwrap the editions array when it has exactly 1 element?
-  $d1 = [ordered]@{ editions = @($probe) }
-  $gp1 = Get-Prop $d1 'editions'
-  P 'M3 Get-Prop(1-elem editions) type' (TypeName $gp1) $null  # info: scalar here == unwrap-on-return
-  P 'M3 (Get-Prop ...).Count direct' (@($gp1).Count) 1
-  P 'M3 @(To-Array (Get-Prop ...)).Count' (@(To-Array $gp1).Count) 1
-
-  # M4: same with 2 elements (the phantom-edition boundary)
-  $d2 = [ordered]@{ editions = @($probe, $probe) }
-  P 'M4 @(To-Array (Get-Prop 2-elem)).Count' (@(To-Array (Get-Prop $d2 'editions')).Count) 2
+  $two = [ordered]@{ editions = @($probe, $probe) }
+  P 'BUG  @(To-Array 2-elem).Count  (the old call sites)' (@(To-Array (Get-Prop $two 'editions')).Count) 1
+  P 'FIX  Cnt 2-elem                (bare To-Array)' (Cnt (Get-Prop $two 'editions')) 2
 
   Write-Host '--- A-E: replay Handle-AdminCreate data path on a FRESH (empty) state ---' -ForegroundColor $yellow
 
   # Fresh box == Read-State with no file == Normalize-State(Empty-State).
   $state = Normalize-State (Empty-State)
-  P 'A  start editions  @(To-Array (Get-Prop)).Count' (@(To-Array (Get-Prop $state 'editions')).Count) 0
+  P 'A  start editions count' (Cnt (Get-Prop $state 'editions')) 0
 
-  $eds = @(To-Array (Get-Prop $state 'editions'))
-  P 'A2 $eds = @(...)    .Count' $eds.Count 0
+  $eds = To-Array (Get-Prop $state 'editions')
+  P 'A2 $eds = To-Array(...) .Count' $eds.Count 0
 
   $draft = Blank-Edition '2026-06-03' 'DataTest'
   P 'B  $draft id' $draft['id'] $null
-  P 'B  $draft type' (TypeName $draft) 'OrderedDictionary'
 
   $state['editions'] = @($eds + , $draft)
-  P 'C  $state[editions].Count (direct index)' (@($state['editions']).Count) 1
-  P 'C  $state[editions][0] type' (TypeName (@($state['editions'])[0])) 'OrderedDictionary'
-  P 'D  @(To-Array (Get-Prop $state editions)).Count' (@(To-Array (Get-Prop $state 'editions')).Count) 1
-
-  # E broken into the three internal steps of Normalize-State so we see WHICH one drops it.
-  $eInner = @(To-Array (Get-Prop $state 'editions'))
-  P 'E1 Normalize internal: $eds.Count' $eInner.Count 1
-  $acc = New-Object System.Collections.ArrayList
-  foreach ($e in $eInner) { [void]$acc.Add((Normalize-Edition $e)) }
-  P 'E2 after foreach Normalize-Edition: acc.Count' $acc.Count 1
-  if ($acc.Count -ge 1) { P 'E2  acc[0] id' (Get-Prop $acc[0] 'id') $null }
+  P 'C  after @($eds + ,$draft) count' (Cnt (Get-Prop $state 'editions')) 1
+  P 'C  ids (must be ONLY the draft, no phantom)' (Ids (Get-Prop $state 'editions')) $draft['id']
 
   $next = Normalize-State $state
-  P 'E  Normalize-State result editions.Count' (@(To-Array (Get-Prop $next 'editions')).Count) 1
-  P 'E  result ids' (((@(To-Array (Get-Prop $next 'editions')) | ForEach-Object { Get-Prop $_ 'id' }) -join ',')) $null
+  P 'E  Normalize-State result count' (Cnt (Get-Prop $next 'editions')) 1
+  P 'E  result ids' (Ids (Get-Prop $next 'editions')) $draft['id']
 
-  Write-Host '--- F: the SelfTest path (JSON round-trip) that PASSES, for contrast ---' -ForegroundColor $yellow
-  $json = Write-BriefingJson $next 0
-  $back = $json | ConvertFrom-Json
-  P 'F  back editions type' (TypeName (Get-Prop $back 'editions')) $null
-  $reNorm = Normalize-State $back
-  P 'F  re-normalized editions.Count' (@(To-Array (Get-Prop $reNorm 'editions')).Count) 1
+  Write-Host '--- F: add a SECOND edition (the phantom/PATCH boundary) ---' -ForegroundColor $yellow
+  $eds2 = To-Array (Get-Prop $next 'editions')
+  $draft2 = Blank-Edition '2026-06-04' 'DataTest 2'
+  $next['editions'] = @($eds2 + , $draft2)
+  $next2 = Normalize-State $next
+  P 'F  two-edition count' (Cnt (Get-Prop $next2 'editions')) 2
+  P 'F  two-edition ids' (Ids (Get-Prop $next2 'editions')) ("{0},{1}" -f $draft['id'], $draft2['id'])
+
+  Write-Host '--- G: JSON round-trip (what -SelfTest exercises) survives ---' -ForegroundColor $yellow
+  $back = (Write-BriefingJson $next2 0) | ConvertFrom-Json
+  P 'G  re-normalized count after round-trip' (Cnt (Get-Prop (Normalize-State $back) 'editions')) 2
 
   Write-Host ''
-  Write-Host 'DATATEST done. First red COUNT above names the broken operation.' -ForegroundColor $yellow
+  Write-Host 'DATATEST done. All A-G green == fix confirmed (BUG line stays 1 by design).' -ForegroundColor $yellow
   exit 0
 }
 
