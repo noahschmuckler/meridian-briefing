@@ -40,6 +40,18 @@ needs Billy to install ARR + create the IIS site.
 **REMAINING before PR #1 merge:** revert the temp diagnostics per the "AFTER CONFIRMATION" note below
 (keep all real fixes + hardened SelfTest). Then Phase 2 (orange) / Phase 3 (CR DEV) deploys.
 
+**Phase 3 standup decision (2026-06-03): reuse saw's `:8080`, no Billy.** The retired-POC
+`meridian-os-saw` already owns the in-network endpoint `cdseastdev.ms.ds.uhc.com:8080` — verified
+**plain HTTP** (`Get-WebBinding` → `protocol http`, `sslFlags 0`) and **ARR not installed**
+(`Get-WebGlobalModule` empty). So the no-Billy route is **Path 1 (retire saw, run server.ps1
+directly on :8080)** — the firewall/host is already open, we're just changing what listens. Noah has
+local admin; repo is already cloned + working at `E:\noahs\meridian-briefing`, `BRIEFING_DB` +
+admin hash set. Recipe: (1) `Remove-Website` the saw site to free :8080; (2) `.env` → `HOST=0.0.0.0
+PORT=8080`; (3) `deploy\install-server.ps1` (reserves URL ACL + SYSTEM startup task); (4) verify
+from another machine. Clear the test editions from `state.json` before announcing. Path 2 (IIS
+reverse-proxy, keeps TLS) was ruled out only because ARR isn't installed (that install is the one
+step that would need Billy). Do the diagnostics revert right AFTER the :8080 cutover is confirmed.
+
 ---
 
 ## ✅ RESOLVED (2026-06-03): PowerShell edition-drop bug — root cause was the `@(To-Array …)` double-wrap
