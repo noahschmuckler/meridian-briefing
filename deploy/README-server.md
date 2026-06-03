@@ -164,16 +164,38 @@ nssm start BriefingServer
 `server.ps1` reads `.env` from the repo root (one dir up from the script), so
 configuration is identical to the scheduled-task path.
 
-## IIS reverse-proxy sketch (Billy)
+## In-network access: two paths
 
-If fronting with IIS + ARR:
-1. Install **URL Rewrite** + **Application Request Routing**.
-2. Create a site (or use an existing one) bound to the desired hostname/port and
-   a TLS cert.
-3. Add an inbound rewrite rule: match `(.*)` → rewrite to
-   `http://127.0.0.1:<port>/{R:1}`, and enable "reverse proxy".
-4. Keep `HOST=127.0.0.1` in `.env` in this case (IIS is the only client); use
-   `HOST=0.0.0.0` only if exposing the PowerShell port directly.
+Providers/editors reach the briefing from their own machines — nobody signs onto
+the server. Pick ONE of:
+
+### A. Direct port (zero extra modules — fastest to stand up)
+1. In `.env` set `HOST=0.0.0.0` (accept LAN connections) and a `PORT` Billy clears.
+2. Billy opens the firewall on that port for the in-network range.
+3. Providers go to `http://<server-host>:<port>/`, editors to `…/admin`.
+
+Trade-off: the URL carries a port and it's plain HTTP. Good enough to pilot.
+
+### B. IIS reverse-proxy (recommended for a clean hostname + TLS) — `deploy/web.config`
+Fronts the PowerShell server with IIS so providers hit a normal
+`https://<hostname>/` URL while `server.ps1` stays bound to `127.0.0.1` (never
+directly reachable). Full step-by-step lives in the header of
+[`deploy/web.config`](web.config); in brief:
+1. **Billy, once per server:** install IIS **URL Rewrite** + **Application Request
+   Routing (ARR)**, then enable proxying:
+   `appcmd set config -section:system.webServer/proxy /enabled:"true" /commit:apphost`.
+2. Create an IIS site bound to the hostname/port (+ TLS cert). Point its physical
+   path at a folder that contains **`deploy/web.config`** (copy the file there —
+   the folder needs nothing else; the PowerShell server serves the real content).
+3. Open the firewall for the **IIS** binding only; do **not** expose `8788`.
+4. Keep `HOST=127.0.0.1 PORT=8788` in `.env` — IIS is the only client.
+
+The catch-all rewrite forwards path+query+cookies, so the SPA's absolute
+`/api/...` paths and the HttpOnly `SameSite=Lax` admin session work unchanged.
+(If you'd rather IIS serve the static assets itself and proxy only `/api/*`, that
+also works but isn't needed — `server.ps1` already serves static fine.)
+
+If ARR can't be installed in the environment, use path A.
 
 ## Backup / DR
 

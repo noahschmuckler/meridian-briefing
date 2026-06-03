@@ -22,12 +22,23 @@ backup path (preserving atomic-on-NTFS) and removes the `.bak` after; if `Replac
 doesn't support it), it falls back to delete-then-`Move` — safe because the server is single-
 threaded (one request at a time). Not the data layer, not auth — purely the temp-file promotion.
 
-**CONFIRM ON THE BOX:** `git pull`, restart server, edit a field → autosave should show "Saved";
-create a 2nd edition → should persist; `server-error.log` should get no new entries.
+**CONFIRMED ON THE BOX (2026-06-03):** save works ("Saved"), 2nd-edition create persists, no new
+`server-error.log` entries. **The PowerShell-server blocker is fully resolved** (three fixes:
+`@(To-Array)` double-wrap `830b3ca`, `File.Replace` null-backup `31b2878`, plus the earlier
+`e98f1a3` key-fix).
 
-(If save now works: this completes the PS-server blocker. Remaining = revert the temp diagnostics
-per the "AFTER CONFIRMATION" note below, then PR #1 is mergeable. Two cosmetic editor issues remain,
-unrelated to save: masthead renders `&amp;` literally; the top-events card renders text vertically.)
+**Cosmetics fixed (`2bb0c08`):** `&amp;` rendered literally (htm doesn't decode entities → use a
+literal `&`); dark admin-bar `<select>` dropdown options were white-on-light-popup (only hovered row
+legible → explicit dark `option` popup). The earlier "top-events card renders vertically" was the
+single-narrow-column state and renders fine with content; left as-is.
+
+**In-network access (`deploy/web.config` + README "two paths"):** added a real IIS reverse-proxy
+config (ARR/URL-Rewrite → `127.0.0.1:8788`, server stays localhost) as the recommended path, with
+the zero-module `HOST=0.0.0.0` + firewall fallback. This is Phase 3 (CR DEV server) deploy material;
+needs Billy to install ARR + create the IIS site.
+
+**REMAINING before PR #1 merge:** revert the temp diagnostics per the "AFTER CONFIRMATION" note below
+(keep all real fixes + hardened SelfTest). Then Phase 2 (orange) / Phase 3 (CR DEV) deploys.
 
 ---
 
