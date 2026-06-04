@@ -26,10 +26,13 @@ The detailed debugging history below (edition-drop + File.Replace) is retained f
 
 Goal: log who reads what / how long for QI, without an app login (decisions +
 design in `~/.claude/plans/meridian-briefing-usage-tracking.md`). Built on a fresh
-branch off `main`. **Status: Node side validated (41/41 tests), PS port written +
-ASCII/brace-checked, client + analytics page done, docs done. Open as a DRAFT PR
-pending on-box verification of the PowerShell Windows-auth path** (no PS on the
-Linux dev box).
+branch off `main`. **Status: Node side validated (41/41 tests + a real headless-
+Chrome run confirming pageview/dwell beacons write to the JSONL store with the
+server-stamped identity), PS port written + ASCII/brace-checked, client +
+analytics page done, docs done. DRAFT PR #2 — pending on-box verification of the
+PowerShell Windows-auth path only** (no PS on the Linux dev box). The analytics
+page renders the admin login clean headless; its logged-in view wants a quick
+click-through on the orange device.
 
 What's in: `lib/usage.js` (JSONL store: sanitize/append/read/summarize) + Node
 `server.js` (`POST /api/track` public, `GET /api/admin/usage` gated) mirrored
