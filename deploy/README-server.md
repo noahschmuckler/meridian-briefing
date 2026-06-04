@@ -197,6 +197,30 @@ also works but isn't needed — `server.ps1` already serves static fine.)
 
 If ARR can't be installed in the environment, use path A.
 
+## Usage tracking (QI analytics)
+
+The server logs who reads what, for how long, to an append-only JSONL store
+(monthly `usage-YYYY-MM.jsonl` under `USAGE_LOG`, default a `usage/` folder
+beside `state.json`). View it at **`/admin` → 📊 Analytics** (behind the same
+admin password): summary + by-user / area / module / day tables with a date
+filter. Raw data keeps usernames by design; surface it selectively.
+
+Identity is captured **without a login page**: the server challenges Negotiate
+**only** on `POST /api/track`, so domain machines in the Local-Intranet zone
+send their Windows identity silently while the app itself never prompts and
+never blocks. To confirm transparent SSO on the box:
+
+```powershell
+# from a domain workstation (not the server), after browsing the site a bit:
+Get-ChildItem <USAGE_LOG-or-state-folder>\usage\*.jsonl | Get-Content -Tail 5
+# each line should show "user":"DOMAIN\\name" (not "anonymous")
+```
+
+If lines show `anonymous`, the site likely isn't in the browser's Local-Intranet
+zone (Negotiate isn't being offered) — add the hostname to that zone (often a
+GPO) or check with IT. Non-domain clients are simply not identified; the app
+still works for them. Back up the `usage/` folder alongside `state.json`.
+
 ## Backup / DR
 
 State is one JSON file at `BRIEFING_DB` (+ a transient `state.json.tmp` during

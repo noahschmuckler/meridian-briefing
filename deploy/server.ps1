@@ -320,6 +320,181 @@ function Write-State($state) {
   return $next
 }
 
+# ---------- usage tracking (lib/usage.js) ----------
+# Append-only JSONL usage log, mirrored from lib/usage.js so this production
+# server writes the identical shape the Node dev server does. Per-request
+# identity comes from the Negotiate handshake on /api/track (see the auth scheme
+# selector in main); every other field is server-stamped here.
+
+$script:UsageTypes = @('pageview', 'area', 'dwell', 'link', 'module')
+$script:UsageStrFields = @('path', 'area', 'edition_id', 'module_id', 'ref')
+
+function Get-UsageDir {
+  $p = Get-EnvOr 'USAGE_LOG' ''
+  $base = [System.IO.Path]::GetDirectoryName((Get-DbPath))
+  if (-not $p) { return (Join-Path $base 'usage') }
+  if ([System.IO.Path]::IsPathRooted($p)) { return $p }
+  return [System.IO.Path]::GetFullPath((Join-Path $base $p))
+}
+
+# The authenticated Windows user for this request, or 'anonymous'. Only the
+# Negotiate-challenged /api/track carries an identity; other paths are anonymous.
+function Get-CurrentUser($context) {
+  try {
+    $idn = $context.User.Identity
+    if ($idn -and $idn.IsAuthenticated -and $idn.Name) { return [string]$idn.Name }
+  } catch { }
+  return 'anonymous'
+}
+
+function Clamp-UsageStr($v) {
+  if ($v -isnot [string]) { return $null }
+  if ($v.Length -gt 200) { $v = $v.Substring(0, 200) }
+  if ($v.Length -eq 0) { return $null }
+  return $v
+}
+
+# Build a stored event (flat [ordered] dict) from a raw client body + server
+# context. Returns $null if the type isn't a known event.
+function Sanitize-UsageEvent($raw, [string]$user, [string]$ip, [string]$ua) {
+  $type = Str (Get-Prop $raw 'type')
+  if ($script:UsageTypes -notcontains $type) { return $null }
+  $ev = [ordered]@{
+    ts   = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+    user = if ($user) { $user } else { 'anonymous' }
+    ip   = if ($ip) { $ip } else { '' }
+    ua   = if ($ua) { $ua } else { '' }
+    type = $type
+  }
+  foreach ($f in $script:UsageStrFields) {
+    $v = Clamp-UsageStr (Get-Prop $raw $f)
+    if ($null -ne $v) { $ev[$f] = $v }
+  }
+  $dur = Get-Prop $raw 'dur_ms'
+  if ($null -ne $dur) {
+    $d = 0.0
+    if ([double]::TryParse([string]$dur, [ref]$d) -and $d -ge 0) {
+      $ev['dur_ms'] = [int][Math]::Min([Math]::Round($d), 86400000)
+    }
+  }
+  return $ev
+}
+
+# Compact one-line JSON for a flat scalar event (JSONL). The pretty
+# Write-BriefingJson would embed newlines, so events get their own encoder.
+function ConvertTo-UsageLine($ev) {
+  $parts = New-Object System.Collections.ArrayList
+  foreach ($k in $ev.Keys) {
+    $val = $ev[$k]
+    if ($val -is [int] -or $val -is [long]) { $vs = [string]$val }
+    else { $vs = Escape-JsonString ([string]$val) }
+    [void]$parts.Add((Escape-JsonString ([string]$k)) + ':' + $vs)
+  }
+  return '{' + ($parts -join ',') + '}'
+}
+
+function Append-UsageEvent($ev) {
+  $dir = Get-UsageDir
+  if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+  $ym = (Get-Date).ToUniversalTime().ToString('yyyy-MM')
+  $file = Join-Path $dir "usage-$ym.jsonl"
+  Add-Content -LiteralPath $file -Value (ConvertTo-UsageLine $ev) -Encoding UTF8
+}
+
+function Read-UsageEvents([string]$since, [string]$until) {
+  $dir = Get-UsageDir
+  $events = New-Object System.Collections.ArrayList
+  if (-not (Test-Path -LiteralPath $dir)) { return , $events.ToArray() }
+  $files = Get-ChildItem -LiteralPath $dir -Filter 'usage-*.jsonl' -File -ErrorAction SilentlyContinue | Sort-Object Name
+  foreach ($f in $files) {
+    $lines = @()
+    try { $lines = [System.IO.File]::ReadAllLines($f.FullName, [System.Text.Encoding]::UTF8) } catch { continue }
+    foreach ($line in $lines) {
+      if (-not $line) { continue }
+      $ev = $null
+      try { $ev = $line | ConvertFrom-Json } catch { continue }
+      $ts = [string](Get-Prop $ev 'ts')
+      if ($since -and $ts -lt $since) { continue }
+      if ($until -and $ts -gt $until) { continue }
+      [void]$events.Add($ev)
+    }
+  }
+  return , $events.ToArray()
+}
+
+function Add-UsageBucket($map, $key, $ev) {
+  if ($null -eq $key -or $key -eq '') { return }
+  $k = [string]$key
+  if (-not $map.Contains($k)) { $map[$k] = [ordered]@{ key = $k; events = 0; dwell_ms = 0 } }
+  $map[$k]['events'] = [int]$map[$k]['events'] + 1
+  $dur = Get-Prop $ev 'dur_ms'
+  if ($null -ne $dur) { $map[$k]['dwell_ms'] = [int]$map[$k]['dwell_ms'] + [int]$dur }
+}
+
+function Sort-UsageBuckets($map) {
+  return @($map.Values | Sort-Object -Property @{ Expression = { $_['events'] }; Descending = $true }, @{ Expression = { $_['dwell_ms'] }; Descending = $true })
+}
+
+function Summarize-Usage($events, [int]$recent) {
+  $byUser = @{}; $byArea = @{}; $byModule = @{}; $byType = @{}; $byDay = @{}
+  $users = @{}
+  $from = $null; $to = $null
+  foreach ($ev in $events) {
+    $u = [string](Get-Prop $ev 'user'); if (-not $u) { $u = 'anonymous' }
+    $users[$u] = $true
+    $ts = [string](Get-Prop $ev 'ts')
+    if (-not $from -or $ts -lt $from) { $from = $ts }
+    if (-not $to -or $ts -gt $to) { $to = $ts }
+    Add-UsageBucket $byUser $u $ev
+    Add-UsageBucket $byType (Get-Prop $ev 'type') $ev
+    if ($ts) { Add-UsageBucket $byDay ($ts.Substring(0, [Math]::Min(10, $ts.Length))) $ev }
+    $area = Get-Prop $ev 'area'; if ($area) { Add-UsageBucket $byArea $area $ev }
+    $mod = Get-Prop $ev 'module_id'; if ($mod) { Add-UsageBucket $byModule $mod $ev }
+  }
+  $result = [ordered]@{
+    total        = $events.Count
+    unique_users = $users.Count
+    range        = [ordered]@{ from = $from; to = $to }
+    by_user      = Sort-UsageBuckets $byUser
+    by_area      = Sort-UsageBuckets $byArea
+    by_module    = Sort-UsageBuckets $byModule
+    by_type      = Sort-UsageBuckets $byType
+    by_day       = @($byDay.Values | Sort-Object -Property @{ Expression = { $_['key'] } })
+  }
+  if ($recent -gt 0 -and $events.Count -gt 0) {
+    $rec = New-Object System.Collections.ArrayList
+    for ($i = $events.Count - 1; $i -ge 0 -and $rec.Count -lt $recent; $i--) { [void]$rec.Add($events[$i]) }
+    $result['recent'] = @($rec.ToArray())
+  }
+  return $result
+}
+
+function Handle-Track($req, $res) {
+  # Best-effort: tracking must never break the page, so swallow everything.
+  try {
+    $body = $null
+    try { $body = Read-JsonBody $req } catch { $body = $null }
+    if ($body) {
+      $ip = ''
+      try { $ip = [string]$req.RemoteEndPoint.Address } catch { }
+      $ua = [string]$req.UserAgent
+      $ev = Sanitize-UsageEvent $body $script:ReqUser $ip $ua
+      if ($ev) { Append-UsageEvent $ev }
+    }
+  } catch { }
+  Send-Text $res 204 ''
+}
+
+function Handle-AdminUsage($req, $res) {
+  $since = [string]$req.QueryString['since']
+  $until = [string]$req.QueryString['until']
+  $recent = 0
+  [void][int]::TryParse([string]$req.QueryString['raw'], [ref]$recent)
+  if ($recent -gt 500) { $recent = 500 }
+  $events = Read-UsageEvents $since $until
+  Send-Json $res 200 (Summarize-Usage $events $recent)
+}
+
 # ---------- auth (lib/auth.js) ----------
 
 function Convert-FromHex([string]$hex) {
@@ -646,6 +821,9 @@ function Handle-Request($req, $res) {
   $m = [regex]::Match($pathname, '^/api/editions/([^/]+)$')
   if ($m.Success -and $method -eq 'GET') { Handle-PublicEdition $req $res ([System.Uri]::UnescapeDataString($m.Groups[1].Value)); return }
 
+  # usage beacon (public; identity stamped server-side from the Negotiate handshake)
+  if ($pathname -eq '/api/track' -and $method -eq 'POST') { Handle-Track $req $res; return }
+
   # admin auth (ungated)
   if ($pathname -eq '/api/admin/login' -and $method -eq 'POST') { Handle-Login $req $res; return }
   if ($pathname -eq '/api/admin/logout' -and $method -eq 'POST') { Handle-Logout $req $res; return }
@@ -653,6 +831,7 @@ function Handle-Request($req, $res) {
   # everything else under /api/admin/ is gated
   if ($pathname.StartsWith('/api/admin/')) {
     if (-not (Test-Session (Get-SessionCookie $req))) { Send-Json $res 401 ([ordered]@{ error = 'unauthorized' }); return }
+    if ($pathname -eq '/api/admin/usage' -and $method -eq 'GET') { Handle-AdminUsage $req $res; return }
     if ($pathname -eq '/api/admin/editions' -and $method -eq 'GET') { Handle-AdminList $req $res; return }
     if ($pathname -eq '/api/admin/editions' -and $method -eq 'POST') { Handle-AdminCreate $req $res; return }
     $pub = [regex]::Match($pathname, '^/api/admin/editions/([^/]+)/publish$')
@@ -731,6 +910,21 @@ $prefix = "http://${prefixHost}:$Port/"
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add($prefix)
+# Soft Windows auth: challenge ONLY /api/track with Negotiate, so domain machines
+# in the Local-Intranet zone send their identity silently; every other path stays
+# anonymous (the app never prompts and never breaks). If the selector can't be set
+# on this host, degrade to anonymous-only rather than refusing to start.
+try {
+  $listener.AuthenticationSchemeSelectorDelegate = [System.Net.AuthenticationSchemeSelector] {
+    param($request)
+    if ($request.Url.AbsolutePath -eq '/api/track') {
+      return [System.Net.AuthenticationSchemes]::IntegratedWindowsAuthentication
+    }
+    return [System.Net.AuthenticationSchemes]::Anonymous
+  }
+} catch {
+  Write-Host "WARN: Windows-auth selector not set; usage will log as anonymous. $($_.Exception.Message)" -ForegroundColor Yellow
+}
 try {
   $listener.Start()
 } catch {
@@ -753,6 +947,7 @@ while ($listener.IsListening) {
     break # listener stopped
   }
   try {
+    $script:ReqUser = Get-CurrentUser $context
     Handle-Request $context.Request $context.Response
   } catch {
     $err = $_

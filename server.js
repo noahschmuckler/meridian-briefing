@@ -32,6 +32,7 @@ import {
   sessionCookieHeader,
   clearCookieHeader,
 } from './lib/auth.js';
+import { sanitizeEvent, appendEvent, readEvents, summarize } from './lib/usage.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '8787', 10);
@@ -127,6 +128,39 @@ function isAuthed(req) {
 
 function adminConfigured() {
   return Boolean(process.env.ADMIN_PASSWORD_HASH && process.env.ADMIN_PASSWORD_SALT);
+}
+
+// Node has no built-in Windows auth; identity comes from a proxy-set header
+// (future IIS with Windows Auth) or DEV_USER, else anonymous. The PowerShell
+// production server reads the real Negotiate identity instead (see server.ps1).
+function currentUser(req) {
+  return req.headers['x-remote-user'] || process.env.DEV_USER || 'anonymous';
+}
+
+// ---------- usage tracking ----------
+
+async function handleTrack(req, res) {
+  // Best-effort: tracking must never break the page, so swallow everything.
+  try {
+    const body = await readBody(req);
+    const ev = sanitizeEvent(body, {
+      user: currentUser(req),
+      ip: req.socket?.remoteAddress || '',
+      ua: req.headers['user-agent'] || '',
+    });
+    if (ev) await appendEvent(ev);
+  } catch {
+    /* ignore — never surface a tracking failure */
+  }
+  res.writeHead(204).end();
+}
+
+async function handleAdminUsage(req, res, url) {
+  const since = url.searchParams.get('since') || undefined;
+  const until = url.searchParams.get('until') || undefined;
+  const recent = Math.min(parseInt(url.searchParams.get('raw') || '0', 10) || 0, 500);
+  const events = await readEvents({ since, until });
+  return sendJson(res, 200, summarize(events, { recent }));
 }
 
 // ---------- public edition endpoints ----------
@@ -299,6 +333,9 @@ const server = createServer(async (req, res) => {
       if (m && method === 'GET') return await handlePublicEdition(req, res, decodeURIComponent(m[1]));
     }
 
+    // --- usage beacon (public; identity stamped server-side) ---
+    if (pathname === '/api/track' && method === 'POST') return await handleTrack(req, res);
+
     // --- admin auth ---
     if (pathname === '/api/admin/login' && method === 'POST') return await handleLogin(req, res);
     if (pathname === '/api/admin/logout' && method === 'POST') return handleLogout(req, res);
@@ -306,6 +343,8 @@ const server = createServer(async (req, res) => {
     // --- everything else under /api/admin is gated ---
     if (pathname.startsWith('/api/admin/')) {
       if (!isAuthed(req)) return sendJson(res, 401, { error: 'unauthorized' });
+
+      if (pathname === '/api/admin/usage' && method === 'GET') return await handleAdminUsage(req, res, url);
 
       if (pathname === '/api/admin/editions' && method === 'GET') return await handleAdminList(req, res);
       if (pathname === '/api/admin/editions' && method === 'POST') return await handleAdminCreate(req, res);
