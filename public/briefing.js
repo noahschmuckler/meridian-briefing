@@ -17,6 +17,7 @@ import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import htm from 'htm';
 
 import { PainPoints } from './painpoints.js';
+import { GuidelinesApp } from './guidelines/app.js';
 
 const html = htm.bind(h);
 
@@ -836,7 +837,7 @@ function MeridianLauncher({ subtitle, tiles, onLogout }) {
       ${tiles.map(
         (t) => html`<button type="button" class="meridian-home__app" onClick=${t.onClick} aria-label=${t.label}>
           <div class=${'meridian-home__icon meridian-home__icon--' + t.variant}>
-            <span class="meridian-home__glyph" aria-hidden="true">${t.glyph}</span>
+            ${t.icon ? t.icon : html`<span class="meridian-home__glyph" aria-hidden="true">${t.glyph}</span>`}
           </div>
           <div class="meridian-home__caption">${t.label}</div>
         </button>`,
@@ -845,10 +846,35 @@ function MeridianLauncher({ subtitle, tiles, onLogout }) {
   </div>`;
 }
 
+// The meridian-os "Mondrian GUI" app image — a 6-cell Mondrian miniature
+// (recreated from src/shell/Launcher.tsx). Reused verbatim as the
+// "Clinical Guidelines" tile image so the two read as the same app family.
+function MondrianMiniature() {
+  return html`<div class="meridian-home__mondrian">
+    <div class="meridian-home__mondrian-cell meridian-home__mondrian-cell--white" style="top:0;left:0;width:60%;height:55%"></div>
+    <div class="meridian-home__mondrian-cell meridian-home__mondrian-cell--red" style="top:0;left:60%;width:40%;height:55%"></div>
+    <div class="meridian-home__mondrian-cell meridian-home__mondrian-cell--blue" style="top:55%;left:0;width:35%;height:45%"></div>
+    <div class="meridian-home__mondrian-cell meridian-home__mondrian-cell--white" style="top:55%;left:35%;width:25%;height:25%"></div>
+    <div class="meridian-home__mondrian-cell meridian-home__mondrian-cell--yellow" style="top:80%;left:35%;width:25%;height:20%"></div>
+    <div class="meridian-home__mondrian-cell meridian-home__mondrian-cell--white" style="top:55%;left:60%;width:40%;height:45%"></div>
+  </div>`;
+}
+
+// Shared across the public + admin homes so the tile is identical in both.
+const GUIDELINES_TILE = {
+  label: 'Clinical Guidelines',
+  variant: 'guidelines',
+  icon: html`<${MondrianMiniature} />`,
+  onClick: () => go('/guidelines'),
+};
+
 // Public launcher (/home): one tile back to the provider briefing.
 function PublicHome() {
   return html`<${MeridianLauncher}
-    tiles=${[{ label: 'Provider Briefing', glyph: '📅', variant: 'briefing', onClick: () => go('/') }]}
+    tiles=${[
+      { label: 'Provider Briefing', glyph: '📅', variant: 'briefing', onClick: () => go('/') },
+      GUIDELINES_TILE,
+    ]}
   />`;
 }
 
@@ -859,6 +885,7 @@ function AdminHome({ onLogout }) {
     onLogout=${onLogout}
     tiles=${[
       { label: 'Provider Briefing', glyph: '📅', variant: 'briefing', onClick: () => go('/admin/edit') },
+      GUIDELINES_TILE,
       { label: 'PainPoints', glyph: '⚠️', variant: 'painpoints', onClick: () => go('/admin/painpoints') },
     ]}
   />`;
@@ -894,6 +921,7 @@ function AdminApp() {
 const path = window.location.pathname.replace(/\/+$/, '') || '/';
 let App;
 if (path === '/home') App = PublicHome;
+else if (path === '/guidelines') App = GuidelinesApp; // public clinical content (same in both user modes)
 else if (path === '/admin' || path === '/admin/edit' || path === '/admin/painpoints') App = AdminApp;
 else App = ReadApp;
 render(html`<${App} />`, document.getElementById('app'));
