@@ -46,7 +46,15 @@ The repo is cloned via GitHub Desktop (e.g.
    Stop-ScheduledTask -TaskName BriefingServer ; Start-ScheduledTask -TaskName BriefingServer
    ```
 4. Open `http://127.0.0.1:8788/` (read view) and `http://127.0.0.1:8788/admin`
-   (sign in with the password you hashed).
+   (sign in with the password you hashed). The home launcher is at `/home`, and
+   the admin launcher (after sign-in) links to the editor and **PainPoints**.
+5. **(Optional) Provision restricted artifacts.** PainPoints and any future
+   internal "explainer" artifacts read a gitignored per-box file:
+   `data\artifacts\<id>.json` (e.g. `data\artifacts\painpoints.json`). Like
+   `.env`, it is **never committed** — copy it into the clone's `data\artifacts\`
+   folder by hand (create the folder if needed). Without it, the PainPoints tile
+   loads but shows "not provisioned on this server." It's served only to a
+   signed-in admin via `GET /api/admin/artifacts/<id>`.
 
 **Just want to see it run once (no scheduled task)?**
 ```powershell

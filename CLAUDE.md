@@ -100,6 +100,19 @@ Reference for this lifecycle + the PowerShell idioms: `~/GitHub_Repos/throughlin
   scope) + an `.admin-mode` block for edit affordances. The meridian-os Briefing
   app stays the design canvas; promote new card types/layouts here deliberately.
   **No runtime coupling** between the two apps.
+- **Restricted artifacts = gitignored data + admin-gated endpoint.** Internal
+  "explainer" artifacts (first one: **PainPoints**, ported from a Claude-chat JSX
+  brief) are NOT FOR DISTRIBUTION and name real people — and this repo is PUBLIC.
+  So the content lives in `data/artifacts/<id>.json` (gitignored, per-box like
+  `.env`, never committed); only a generic content-free renderer
+  (`public/painpoints.js`) is committed. `GET /api/admin/artifacts/:id` (gated by
+  the admin session, id `^[a-z0-9-]+$`, served raw) is the only way to read it —
+  added to BOTH runtimes in lockstep. Reuse this pattern for future artifacts:
+  new renderer + a new gitignored `data/artifacts/<id>.json`, no schema change.
+- **Home launcher recreates the meridian-os launcher.** `/home` is the public
+  landing the briefing's "Meridian Home" footer link now points at (was the
+  Cloudflare demo; `normalizeEdition` self-heals the old href on read). The authed
+  `/admin` shows the same launcher with an "admin" subtitle + a PainPoints tile.
 - **Server speaks plain HTTP.** TLS + friendly hostname are Billy's layer (IIS
   reverse-proxy or a firewall'd port). `HOST=0.0.0.0` to expose directly;
   `127.0.0.1` when IIS fronts it. Port is `.env`-driven.
@@ -115,9 +128,12 @@ lib/
   auth.js            scrypt hash/verify, in-memory session store, cookie helpers
   id.js              newEditionId (ed_<YYYYMMDD>_<rand4>), newSessionId (32-byte hex)
 public/
-  index.html         SPA shell; import map → vendored Preact/htm; mounts briefing.js
-  briefing.js        Preact app: ReadApp / AdminApp(Login+Editor) / shared <Briefing> renderer
+  index.html         SPA shell; import map → vendored Preact/htm; mounts briefing.js (+ home.css, painpoints.css)
+  briefing.js        Preact app. Pathname router: / → ReadApp; /home → PublicHome; /admin(+/edit,/painpoints) → AdminApp (auth-gate → AdminHome launcher / Editor / PainPoints). MeridianLauncher recreates the meridian-os launcher. Imports PainPoints from painpoints.js.
+  painpoints.js      GENERIC renderer for a gated internal artifact (header/sidebar/cards/todos/flow). Carries NO content — fetches /api/admin/artifacts/painpoints. Committed; safe in the public repo.
   briefing.css       lifted briefing styles (.briefing-app scope) + .admin-mode edit affordances
+  home.css           .meridian-home launcher styles (public + admin home screens)
+  painpoints.css     .painpoints viewer styles (dark-green artifact theme)
   favicon.svg        navy/teal/gold mark
   vendor/            preact.module.js, hooks.module.js, htm.module.js (no build step)
 scripts/

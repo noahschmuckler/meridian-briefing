@@ -153,7 +153,7 @@ const edition = normalizeEdition({
     },
   ],
   footerLinks: [
-    { label: 'Meridian Home', href: 'https://meridian-os.pages.dev/' },
+    { label: 'Meridian Home', href: '/home' },
     { label: 'HEDIS Dashboard', href: '#' },
     { label: 'Epic Learning Portal', href: '#' },
     { label: 'Quality Dashboard', href: '#' },

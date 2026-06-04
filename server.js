@@ -317,6 +317,28 @@ async function handleAdminDelete(req, res, id) {
   return sendJson(res, 200, { ok: true });
 }
 
+// ---------- admin: restricted artifacts ----------
+// Internal "explainer" artifacts (e.g. PainPoints) live as gitignored JSON in the
+// data dir alongside state.json — never committed to this PUBLIC repo, placed
+// per-box like .env. Served only to an authenticated admin session, raw (no
+// re-serialization, so the artifact's free-form shape is preserved exactly).
+
+const ARTIFACT_ID = /^[a-z0-9-]+$/;
+
+async function handleArtifact(req, res, id) {
+  if (!ARTIFACT_ID.test(id)) return sendJson(res, 400, { error: 'bad artifact id' });
+  try {
+    const file = join(dirname(dbPath()), 'artifacts', `${id}.json`);
+    const data = await readFile(file, 'utf8');
+    return send(res, 200, data, {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+    });
+  } catch {
+    return sendJson(res, 404, { error: 'artifact not found' });
+  }
+}
+
 // ---------- router ----------
 
 const server = createServer(async (req, res) => {
@@ -345,6 +367,11 @@ const server = createServer(async (req, res) => {
       if (!isAuthed(req)) return sendJson(res, 401, { error: 'unauthorized' });
 
       if (pathname === '/api/admin/usage' && method === 'GET') return await handleAdminUsage(req, res, url);
+
+      {
+        const art = pathname.match(/^\/api\/admin\/artifacts\/([^/]+)$/);
+        if (art && method === 'GET') return await handleArtifact(req, res, decodeURIComponent(art[1]));
+      }
 
       if (pathname === '/api/admin/editions' && method === 'GET') return await handleAdminList(req, res);
       if (pathname === '/api/admin/editions' && method === 'POST') return await handleAdminCreate(req, res);

@@ -16,7 +16,16 @@ import { h, render, Fragment } from 'preact';
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import htm from 'htm';
 
+import { PainPoints } from './painpoints.js';
+
 const html = htm.bind(h);
+
+// Full-page navigation between the SPA's pathname-routed views. A reload is fine
+// here — each view re-checks its own auth/state on mount — and it keeps the
+// router dead simple (no history shim).
+function go(path) {
+  window.location.assign(path);
+}
 
 // ---- enum vocabularies (mirror lib/store.js) ----
 const LEFT_TINTS = ['teal', 'coral', 'sage', 'lavender'];
@@ -769,6 +778,7 @@ function Editor({ onLogout }) {
   return html`<${Fragment}>
     <div class="briefing-app admin-mode" style="min-height:0;">
       <div class="admin-bar">
+        <button type="button" class="admin-bar__back" onClick=${() => go('/admin')} title="Back to meridian">‹ meridian</button>
         <span class="admin-bar__brand">Briefing Editor</span>
         ${list.length > 0 &&
         html`<select value=${selId} onChange=${(e) => selectEdition(e.currentTarget.value)}>
@@ -813,8 +823,49 @@ function Editor({ onLogout }) {
   <//>`;
 }
 
+// ════════════════════════════════════════════════════════════════════
+// meridian launcher (home screens) — recreation of the meridian-os launcher
+// ════════════════════════════════════════════════════════════════════
+
+function MeridianLauncher({ subtitle, tiles, onLogout }) {
+  return html`<div class="meridian-home">
+    ${onLogout && html`<button type="button" class="meridian-home__logout" onClick=${onLogout}>Log out</button>`}
+    <div class="meridian-home__wordmark">meridian</div>
+    ${subtitle && html`<div class="meridian-home__subtitle">${subtitle}</div>`}
+    <div class="meridian-home__apps">
+      ${tiles.map(
+        (t) => html`<button type="button" class="meridian-home__app" onClick=${t.onClick} aria-label=${t.label}>
+          <div class=${'meridian-home__icon meridian-home__icon--' + t.variant}>
+            <span class="meridian-home__glyph" aria-hidden="true">${t.glyph}</span>
+          </div>
+          <div class="meridian-home__caption">${t.label}</div>
+        </button>`,
+      )}
+    </div>
+  </div>`;
+}
+
+// Public launcher (/home): one tile back to the provider briefing.
+function PublicHome() {
+  return html`<${MeridianLauncher}
+    tiles=${[{ label: 'Provider Briefing', glyph: '📅', variant: 'briefing', onClick: () => go('/') }]}
+  />`;
+}
+
+// Admin launcher (authed /admin): briefing → editor, PainPoints → artifact.
+function AdminHome({ onLogout }) {
+  return html`<${MeridianLauncher}
+    subtitle="admin"
+    onLogout=${onLogout}
+    tiles=${[
+      { label: 'Provider Briefing', glyph: '📅', variant: 'briefing', onClick: () => go('/admin/edit') },
+      { label: 'PainPoints', glyph: '⚠️', variant: 'painpoints', onClick: () => go('/admin/painpoints') },
+    ]}
+  />`;
+}
+
 function AdminApp() {
-  const [authed, setAuthed] = useState(null); // null=checking, false=login, true=editor
+  const [authed, setAuthed] = useState(null); // null=checking, false=login, true=authed
 
   useEffect(() => {
     apiJson('/api/admin/editions').then((r) => setAuthed(r.ok));
@@ -822,9 +873,27 @@ function AdminApp() {
 
   if (authed === null) return html`<div class="briefing-app"><div class="briefing-status">…</div></div>`;
   if (!authed) return html`<${Login} onAuthed=${() => setAuthed(true)} />`;
-  return html`<${Editor} onLogout=${() => setAuthed(false)} />`;
+
+  // Authed: route by sub-path. /admin → launcher; /admin/edit → editor;
+  // /admin/painpoints → the gated artifact. (Server SPA-fallback serves the
+  // shell for all three; this is where the front-end picks the view.)
+  const sub = window.location.pathname.replace(/\/+$/, '');
+  if (sub === '/admin/edit') return html`<${Editor} onLogout=${() => setAuthed(false)} />`;
+  if (sub === '/admin/painpoints') return html`<${PainPoints} onBack=${() => go('/admin')} />`;
+
+  const logout = async () => {
+    await apiJson('/api/admin/logout', { method: 'POST' });
+    setAuthed(false);
+  };
+  return html`<${AdminHome} onLogout=${logout} />`;
 }
 
 // ---- mount ----
-const isAdmin = window.location.pathname.replace(/\/+$/, '') === '/admin';
-render(html`<${isAdmin ? AdminApp : ReadApp} />`, document.getElementById('app'));
+// Pathname router. The server serves the SPA shell for every non-/api/ path, so
+// these are all client-side. /admin* is gated inside AdminApp.
+const path = window.location.pathname.replace(/\/+$/, '') || '/';
+let App;
+if (path === '/home') App = PublicHome;
+else if (path === '/admin' || path === '/admin/edit' || path === '/admin/painpoints') App = AdminApp;
+else App = ReadApp;
+render(html`<${App} />`, document.getElementById('app'));
