@@ -603,6 +603,11 @@ function Send-Bytes($res, [int]$status, [byte[]]$bytes, [string]$contentType, [s
   try {
     $res.StatusCode = $status
     $res.ContentType = $contentType
+    # This server handles one request at a time (the accept loop is serial), so a
+    # kept-alive connection that goes idle/half-dead can stall the next OutputStream
+    # write ("The semaphore timeout period has expired") and freeze the whole site.
+    # Close each connection after its response so idle connections don't accumulate.
+    try { $res.KeepAlive = $false } catch { }
     if ($setCookie) { foreach ($c in $setCookie) { $res.AppendHeader('Set-Cookie', $c) } }
     $res.ContentLength64 = $bytes.Length
     $res.OutputStream.Write($bytes, 0, $bytes.Length)
@@ -910,6 +915,9 @@ $prefix = "http://${prefixHost}:$Port/"
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add($prefix)
+# Single-threaded accept loop: bound how long an idle/stalled connection can sit
+# so it can't wedge the one thread for the default 2-minute window.
+try { $listener.TimeoutManager.IdleConnection = [TimeSpan]::FromSeconds(10) } catch { }
 # Soft Windows auth: challenge ONLY /api/track with Negotiate, so domain machines
 # in the Local-Intranet zone send their identity silently; every other path stays
 # anonymous (the app never prompts and never breaks). If the selector can't be set
