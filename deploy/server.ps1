@@ -947,6 +947,20 @@ Write-Host "meridian-briefing (PowerShell) -> $prefix"
 Write-Host "  DB:    $(Get-DbPath)"
 Write-Host "  Admin: $(if (Test-AdminConfigured) { 'configured' } else { 'NOT configured (set ADMIN_PASSWORD_* in .env)' })"
 
+# --- TEMPORARY request trace (remove once the hang is diagnosed) ----------------
+# Writes one START line per request before handling and one END line after, to
+# request-trace.log in the repo root. When the site hangs:
+#   * a START with no matching END  => that request's HANDLER is stuck
+#   * NO new START after the last END (and the process CPU is ~0) => the accept /
+#     Windows-auth handshake itself is blocking (before any handler runs)
+$script:ReqN = 0
+function Trace-Req([string]$m) {
+  try {
+    $line = '[{0}] {1}' -f (Get-Date).ToString('HH:mm:ss.fff'), $m
+    Add-Content -LiteralPath (Join-Path $script:RepoRoot 'request-trace.log') -Value $line
+  } catch { }
+}
+
 while ($listener.IsListening) {
   $context = $null
   try {
@@ -954,10 +968,17 @@ while ($listener.IsListening) {
   } catch {
     break # listener stopped
   }
+  $script:ReqN = $script:ReqN + 1
+  $reqLabel = "#$($script:ReqN)"
+  try { $reqLabel = "#$($script:ReqN) $($context.Request.HttpMethod) $($context.Request.Url.AbsolutePath)" } catch { }
+  Trace-Req "START $reqLabel"
+  $reqSw = [System.Diagnostics.Stopwatch]::StartNew()
   try {
     $script:ReqUser = Get-CurrentUser $context
     Handle-Request $context.Request $context.Response
+    Trace-Req ("END   $reqLabel ({0} ms)" -f $reqSw.ElapsedMilliseconds)
   } catch {
+    Trace-Req ("ERR   $reqLabel ({0} ms)" -f $reqSw.ElapsedMilliseconds)
     $err = $_
     # Log the full error (message + PS line + stack) so failures are diagnosable
     # without a debugger. server-error.log sits in the repo root; tail it with
