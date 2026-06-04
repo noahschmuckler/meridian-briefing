@@ -580,20 +580,25 @@ function Analytics() {
     // eslint-disable-next-line
   }, []);
 
-  const table = (title, label, rows, showDwell) =>
-    html`<div class="analytics-table">
+  const table = (title, label, rows, showDwell) => {
+    // The PowerShell server can hand back a single-row group as a bare object (or
+    // an empty group as null) instead of an array; coerce so .map never throws
+    // and crashes the whole page.
+    const list = Array.isArray(rows) ? rows : rows && typeof rows === 'object' ? [rows] : [];
+    return html`<div class="analytics-table">
       <h3>${title}</h3>
-      ${!rows || rows.length === 0
+      ${list.length === 0
         ? html`<p class="analytics-empty">No data yet.</p>`
         : html`<table>
             <thead><tr><th>${label}</th><th>events</th>${showDwell ? html`<th>time</th>` : ''}</tr></thead>
             <tbody>
-              ${rows.map(
+              ${list.map(
                 (r) => html`<tr><td>${r.key}</td><td>${r.events}</td>${showDwell ? html`<td>${fmtDur(r.dwell_ms)}</td>` : ''}</tr>`,
               )}
             </tbody>
           </table>`}
     </div>`;
+  };
 
   if (err) return html`<div class="analytics"><p class="analytics-error">${err}</p></div>`;
   if (!data) return html`<div class="analytics"><p class="analytics-empty">Loading usage…</p></div>`;
