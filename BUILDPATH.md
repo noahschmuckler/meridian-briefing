@@ -22,6 +22,34 @@ Remaining roadmap: Phase 2 (orange device) if still wanted; otherwise the v1 dep
 
 The detailed debugging history below (edition-drop + File.Replace) is retained for reference.
 
+## 🔧 IN FLIGHT (2026-06-03): per-user usage tracking + admin analytics — branch `noah/usage-tracking`
+
+Goal: log who reads what / how long for QI, without an app login (decisions +
+design in `~/.claude/plans/meridian-briefing-usage-tracking.md`). Built on a fresh
+branch off `main`. **Status: Node side validated (41/41 tests), PS port written +
+ASCII/brace-checked, client + analytics page done, docs done. Open as a DRAFT PR
+pending on-box verification of the PowerShell Windows-auth path** (no PS on the
+Linux dev box).
+
+What's in: `lib/usage.js` (JSONL store: sanitize/append/read/summarize) + Node
+`server.js` (`POST /api/track` public, `GET /api/admin/usage` gated) mirrored
+faithfully into `deploy/server.ps1`. Identity = **soft Windows auth**: an
+`AuthenticationSchemeSelectorDelegate` challenges Negotiate **only** on
+`/api/track` (everything else anonymous → app never prompts/breaks); main loop
+stamps `$script:ReqUser`; degrades to anonymous if the selector can't be set.
+Client (`public/briefing.js`): `track()` beacon (keepalive + credentials),
+pageview + page-dwell + per-initiative open/dwell, `window.mbTrack` hook for the
+future CS-module links, and an **Analytics** view behind `/admin` (summary +
+by user/area/module/day, date filter). `USAGE_LOG` + `DEV_USER` documented in
+`.env.example`; README "Usage tracking" section added.
+
+**Verify on the box (after the main resync):** check `-SelfTest` still PASSes,
+then from a domain workstation browse the site and confirm
+`usage/usage-YYYY-MM.jsonl` lines show `"user":"DOMAIN\\name"` (not `anonymous`).
+Decisions locked: soft auth; keep shared admin password (AD-group later, after the
+credential migration); CS modules host-on-enterprise (phase B) is the real target,
+this is its tracking foundation; log everything with names, surface selectively.
+
 ## ✅ FOLLOW-ON FIXED (2026-06-03): writes over an existing state.json threw `File.Replace` "path not of a legal form"
 
 After the `@(To-Array …)` data fix landed (confirmed: `-DataTest` A–G green, `-SelfTest` PASS,
