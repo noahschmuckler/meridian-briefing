@@ -51,6 +51,26 @@ async function apiJson(path, opts) {
   return { ok: res.ok, status: res.status, body };
 }
 
+// ---- usage beacon (best-effort; must never block or break the UI) ----
+// keepalive lets it survive page unload (for dwell flushes); credentials carries
+// the Windows/Negotiate identity transparently for in-zone domain machines.
+function track(type, fields = {}) {
+  try {
+    fetch('/api/track', {
+      method: 'POST',
+      credentials: 'include',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, path: location.pathname, ...fields }),
+    }).catch(() => {});
+  } catch {
+    /* ignore */
+  }
+}
+// Exposed so future controlled-substance module deep-links can report opens:
+//   window.mbTrack('module', { module_id: 'cs-opioids' })
+if (typeof window !== 'undefined') window.mbTrack = track;
+
 // Immutable set-in by path, e.g. setIn(ed, ['leftAdvisories', 2, 'headline'], v).
 function setIn(obj, path, value) {
   if (path.length === 0) return value;
@@ -386,6 +406,46 @@ function ReadApp() {
     });
   }, []);
 
+  // Usage: one pageview per edition shown.
+  useEffect(() => {
+    if (edition) track('pageview', { edition_id: edition.id });
+  }, [edition && edition.id]);
+
+  // Usage: total dwell on the read view, flushed on hide / unload.
+  useEffect(() => {
+    let start = Date.now();
+    const flush = () => {
+      const dur = Date.now() - start;
+      if (dur > 1000) track('dwell', { area: 'briefing', dur_ms: dur });
+      start = Date.now();
+    };
+    const onVis = () => (document.visibilityState === 'hidden' ? flush() : (start = Date.now()));
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      flush();
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, []);
+
+  // Usage: per-initiative open + dwell (flush the previous on switch/close).
+  const areaTimer = useRef({ key: null, t: 0 });
+  useEffect(() => {
+    const prev = areaTimer.current;
+    if (prev.key) {
+      const dur = Date.now() - prev.t;
+      if (dur > 1000) track('dwell', { area: 'initiative:' + prev.key, edition_id: edition && edition.id, dur_ms: dur });
+    }
+    if (expanded) {
+      track('area', { area: 'initiative:' + expanded, edition_id: edition && edition.id });
+      areaTimer.current = { key: expanded, t: Date.now() };
+    } else {
+      areaTimer.current = { key: null, t: 0 };
+    }
+    // eslint-disable-next-line
+  }, [expanded]);
+
   const toggleMenu = useCallback(() => {
     setMenuOpen((open) => {
       if (!open) apiJson('/api/editions').then((r) => r.ok && setMenuItems(r.body || []));
@@ -488,6 +548,78 @@ function NewDraftDialog({ editions, onCreate, onClose }) {
   </div>`;
 }
 
+function fmtDur(ms) {
+  if (!ms) return '—';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ' + (s % 60) + 's';
+  return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+}
+
+// Admin-only usage analytics. Reads the wide raw store via /api/admin/usage and
+// surfaces it at whatever granularity we choose (here: summary + a few tables).
+function Analytics() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState('');
+  const [since, setSince] = useState('');
+  const [until, setUntil] = useState('');
+
+  const load = useCallback(async () => {
+    setErr('');
+    const qs = new URLSearchParams();
+    if (since) qs.set('since', since + 'T00:00:00.000Z');
+    if (until) qs.set('until', until + 'T23:59:59.999Z');
+    const r = await apiJson('/api/admin/usage' + (qs.toString() ? '?' + qs.toString() : ''));
+    if (r.ok) setData(r.body);
+    else setErr(r.body?.error || 'Failed to load usage.');
+  }, [since, until]);
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line
+  }, []);
+
+  const table = (title, label, rows, showDwell) =>
+    html`<div class="analytics-table">
+      <h3>${title}</h3>
+      ${!rows || rows.length === 0
+        ? html`<p class="analytics-empty">No data yet.</p>`
+        : html`<table>
+            <thead><tr><th>${label}</th><th>events</th>${showDwell ? html`<th>time</th>` : ''}</tr></thead>
+            <tbody>
+              ${rows.map(
+                (r) => html`<tr><td>${r.key}</td><td>${r.events}</td>${showDwell ? html`<td>${fmtDur(r.dwell_ms)}</td>` : ''}</tr>`,
+              )}
+            </tbody>
+          </table>`}
+    </div>`;
+
+  if (err) return html`<div class="analytics"><p class="analytics-error">${err}</p></div>`;
+  if (!data) return html`<div class="analytics"><p class="analytics-empty">Loading usage…</p></div>`;
+
+  const range = data.range && data.range.from ? `${data.range.from.slice(0, 10)} → ${data.range.to.slice(0, 10)}` : 'no events';
+
+  return html`<div class="analytics">
+    <div class="analytics-controls">
+      <label>From <input type="date" value=${since} onInput=${(e) => setSince(e.currentTarget.value)} /></label>
+      <label>To <input type="date" value=${until} onInput=${(e) => setUntil(e.currentTarget.value)} /></label>
+      <button type="button" class="btn-primary" onClick=${load}>Apply</button>
+    </div>
+    <div class="analytics-cards">
+      <div class="analytics-card"><div class="n">${data.total}</div><div class="l">events</div></div>
+      <div class="analytics-card"><div class="n">${data.unique_users}</div><div class="l">unique users</div></div>
+      <div class="analytics-card"><div class="n">${range}</div><div class="l">date range</div></div>
+    </div>
+    <div class="analytics-grid">
+      ${table('By user', 'user', data.by_user, true)}
+      ${table('By area', 'area', data.by_area, true)}
+      ${table('By module', 'module', data.by_module, true)}
+      ${table('By day', 'day', data.by_day, false)}
+    </div>
+  </div>`;
+}
+
 function Editor({ onLogout }) {
   const [list, setList] = useState([]); // [{id,date,title,published,...}]
   const [currentId, setCurrentId] = useState(null);
@@ -497,6 +629,7 @@ function Editor({ onLogout }) {
   const [layout, setLayout] = useState('landscape');
   const [saveState, setSaveState] = useState('idle'); // idle|saving|saved|error
   const [showNew, setShowNew] = useState(false);
+  const [view, setView] = useState('edit'); // 'edit' | 'analytics'
   const saveTimer = useRef(null);
 
   const refreshList = useCallback(async (pick) => {
@@ -637,6 +770,9 @@ function Editor({ onLogout }) {
           ${list.map((e) => html`<option value=${e.id}>${e.published ? '● ' : '○ '}${e.title} — ${e.date}</option>`)}
         </select>`}
         <button type="button" class="btn-primary" onClick=${() => setShowNew(true)}>+ New draft</button>
+        <button type="button" class=${view === 'analytics' ? 'active' : ''} onClick=${() => setView(view === 'analytics' ? 'edit' : 'analytics')}>
+          ${view === 'analytics' ? '← Editor' : '📊 Analytics'}
+        </button>
         ${edition &&
         html`<${Fragment}>
           <span class=${'chip ' + (edition.published ? 'chip-published' : 'chip-draft')}>${edition.published ? 'Published' : 'Draft'}</span>
@@ -652,20 +788,22 @@ function Editor({ onLogout }) {
         <button type="button" onClick=${doLogout}>Log out</button>
       </div>
     </div>
-    ${edition
-      ? html`<${Briefing}
-          edition=${edition}
-          layout=${layout}
-          setLayout=${setLayout}
-          expanded=${null}
-          setExpanded=${() => {}}
-          edit=${{ onEdit: applyEdit, addItem, removeItem, moveItem }}
-          dateMenu=${null}
-        />`
-      : html`<div class="briefing-app"><div class="briefing-status">
-          <h2 style="font-family:'DM Serif Display',serif;color:var(--crh-navy);">No editions yet</h2>
-          <p>Click <strong>+ New draft</strong> above to create your first briefing, then publish it.</p>
-        </div></div>`}
+    ${view === 'analytics'
+      ? html`<${Analytics} />`
+      : edition
+        ? html`<${Briefing}
+            edition=${edition}
+            layout=${layout}
+            setLayout=${setLayout}
+            expanded=${null}
+            setExpanded=${() => {}}
+            edit=${{ onEdit: applyEdit, addItem, removeItem, moveItem }}
+            dateMenu=${null}
+          />`
+        : html`<div class="briefing-app"><div class="briefing-status">
+            <h2 style="font-family:'DM Serif Display',serif;color:var(--crh-navy);">No editions yet</h2>
+            <p>Click <strong>+ New draft</strong> above to create your first briefing, then publish it.</p>
+          </div></div>`}
     ${showNew && html`<${NewDraftDialog} editions=${list} onCreate=${doCreate} onClose=${() => setShowNew(false)} />`}
   <//>`;
 }
