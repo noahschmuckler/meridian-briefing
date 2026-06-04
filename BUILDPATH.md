@@ -4,6 +4,29 @@ High-density status for picking up work in a fresh session. Pairs with CLAUDE.md
 (conventions/locked decisions) and `~/.claude/plans/meridian-briefing-v1.md`
 (original plan).
 
+## 🚢 SHIPPED + LIVE (2026-06-04): usage analytics fixed · home launcher · PainPoints artifact area
+
+All on `main`, deployed + sanity-checked on the live CR DEV box.
+
+- **Usage tracking + admin analytics (PR #2) shipped, and the "analytics hangs the site" bug is
+  FIXED.** Two distinct causes: (a) the single-threaded HttpListener froze on a stalled keep-alive
+  socket write ("semaphore timeout" on /briefing.css|js) → PR #5 sets `Response.KeepAlive = $false`
+  in `Send-Bytes` + `TimeoutManager.IdleConnection = 10s`; (b) the real one — PowerShell unwraps a
+  single-element array on function return, so `Sort-UsageBuckets` returned a bare object for a
+  one-row group, the server serialized `by_user` as `{…}` not `[{…}]`, and the frontend `.map()`
+  crashed the page (looked like a server hang; the server was fine). PR #6: `Sort-UsageBuckets`
+  returns `, @(…)` + the analytics `table()` coerces rows to an array. **Convention recorded in
+  CLAUDE.md PS landmine #3.** `deploy/diagnose-usage.ps1` (PR #4) is the standalone tool that
+  localized it (reads the on-box log + runs read→summarize→serialize with timing); kept for reuse.
+- **Home launcher + gated PainPoints artifact area (PR #3) shipped + live.** Recreated the
+  meridian-os launcher inside the briefing: `/home` (public, one Provider Briefing tile) and the
+  authed `/admin` launcher ("admin" subtitle; Provider Briefing → editor, PainPoints → artifact).
+  PainPoints content is **gitignored per-box** (`data/artifacts/painpoints.json`, placed like `.env`
+  — on the live box at `E:\meridian-briefing-data\artifacts\painpoints.json`), served only via the
+  admin-gated `GET /api/admin/artifacts/:id` (both runtimes). The "Meridian Home" footer link now
+  points to `/home` (`normalizeEdition` self-heals the old Cloudflare href on read). Pattern for the
+  next artifact: new renderer + a new gitignored `data/artifacts/<id>.json`, no schema change.
+
 ## 🚢 SHIPPED + LIVE (2026-06-03): PowerShell server in production on the CR DEV box
 
 PR #1 (`noah/powershell-server`) squash-merged to `main`. The briefing is **live in-network at

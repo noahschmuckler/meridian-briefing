@@ -71,8 +71,12 @@ Reference for this lifecycle + the PowerShell idioms: `~/GitHub_Repos/throughlin
   emoji/middot are built via `[char]::ConvertFromUtf32`, never typed literally.
   Atomic writes use `[System.IO.File]::Replace`; HOST `0.0.0.0`→`+` wildcard prefix
   (needs SYSTEM or a `netsh http add urlacl` reservation, which `install-server.ps1`
-  makes). **No PowerShell on the Linux dev box** — verify the PS side with
-  `server.ps1 -SelfTest` + the smoke recipe in `deploy/README-server.md` on Windows.
+  makes). (3) **A PS function that returns a list MUST return `, @(...)`** — a bare
+  `return @(...)` is unwrapped to a scalar when the result is a single element, so a
+  one-row group serialized as `{…}` instead of `[{…}]` and crashed the analytics
+  page's `.map()` (fixed 2026-06-04 in `Sort-UsageBuckets`; `Read-UsageEvents`/`To-Array`
+  already use the comma — match them). **No PowerShell on the Linux dev box** — verify the
+  PS side with `server.ps1 -SelfTest` + the smoke recipe in `deploy/README-server.md` on Windows.
 - **Single shared admin password, in-memory sessions.** No per-user accounts in
   v1. Sessions are a `Map` in `lib/auth.js`; a server restart logs everyone out
   (acceptable for a single-admin tool; documented in `.env.example`).
