@@ -77,7 +77,15 @@ shape works here until Billy provisions a nicer name.
    Stop-ScheduledTask -TaskName BriefingServer ; Start-ScheduledTask -TaskName BriefingServer
    ```
 6. Local check on the box: `http://127.0.0.1:<port>/`.
-7. **Billy:** open the firewall on `<port>` for the in-network range, and/or add
+7. **(Optional) Provision restricted artifacts.** PainPoints + future internal
+   "explainer" artifacts read a gitignored per-box file at
+   `<BRIEFING_DB dir>\artifacts\<id>.json` (e.g. alongside `state.json`:
+   `D:\meridian-briefing-data\artifacts\painpoints.json`). Like `.env` it is
+   **never committed** — copy it onto the box by hand. It's served only to a
+   signed-in admin via `GET /api/admin/artifacts/<id>`; without it the PainPoints
+   tile shows "not provisioned." NOT FOR DISTRIBUTION content stays off GitHub
+   and off the public read view this way.
+8. **Billy:** open the firewall on `<port>` for the in-network range, and/or add
    an IIS reverse-proxy site (Application Request Routing) that forwards a
    hostname/path to `http://127.0.0.1:<port>/`. Then in-network providers reach
    the read view; Noah reaches `/admin`.

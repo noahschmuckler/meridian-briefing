@@ -213,6 +213,15 @@ function Normalize-Edition($e) {
   $out['topEvents'] = To-Array $out['topEvents']
   $out['initiatives'] = To-Array $out['initiatives']
   $out['footerLinks'] = To-Array $out['footerLinks']
+  # Self-heal the legacy "Meridian Home" Cloudflare link -> local /home launcher
+  # (lockstep with lib/store.js rewriteFooterLinks). In-place; items may be
+  # ordered hashtables (Blank-Edition) or PSCustomObjects (read from disk).
+  foreach ($lnk in $out['footerLinks']) {
+    if ((Get-Prop $lnk 'href') -eq 'https://meridian-os.pages.dev/') {
+      if ($lnk -is [System.Collections.IDictionary]) { $lnk['href'] = '/home' }
+      elseif ($lnk -is [psobject]) { $lnk.PSObject.Properties['href'].Value = '/home' }
+    }
+  }
   return $out
 }
 
@@ -270,7 +279,7 @@ function Blank-Edition($date, $title) {
       [ordered]@{ key = 'k1'; title = 'New initiative'; tag = 'Quality'; dot = 'blue'; statusLead = 'Status.'; statusBody = ' Status detail.'; why = 'Why this matters.'; how = 'How it affects your workflow.'; what = 'What you need to do.' }
     )
     footerLinks = @(
-      [ordered]@{ label = 'Meridian Home'; href = 'https://meridian-os.pages.dev/' }
+      [ordered]@{ label = 'Meridian Home'; href = '/home' }
     )
   }
   return Normalize-Edition $ed
@@ -809,6 +818,21 @@ function Handle-AdminDelete($req, $res, [string]$id) {
   Send-Json $res 200 ([ordered]@{ ok = $true })
 }
 
+# ---------- admin: restricted artifacts (lockstep with server.js handleArtifact) ----------
+# Internal "explainer" artifacts (e.g. PainPoints) live as gitignored JSON in the
+# data dir alongside state.json -- never committed to this PUBLIC repo, placed
+# per-box like .env. Served only to an authenticated admin session, raw (no
+# re-serialization, so the artifact's free-form shape is preserved exactly).
+function Handle-Artifact($req, $res, [string]$id) {
+  if ($id -notmatch '^[a-z0-9-]+$') { Send-Json $res 400 ([ordered]@{ error = 'bad artifact id' }); return }
+  $dir = Join-Path ([System.IO.Path]::GetDirectoryName((Get-DbPath))) 'artifacts'
+  $file = Join-Path $dir ($id + '.json')
+  if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { Send-Json $res 404 ([ordered]@{ error = 'artifact not found' }); return }
+  $txt = [System.IO.File]::ReadAllText($file, [System.Text.Encoding]::UTF8)
+  $res.AddHeader('Cache-Control', 'no-store')
+  Send-Text $res 200 $txt 'application/json; charset=utf-8'
+}
+
 # ---------- router ----------
 
 function Handle-Request($req, $res) {
@@ -832,6 +856,8 @@ function Handle-Request($req, $res) {
   if ($pathname.StartsWith('/api/admin/')) {
     if (-not (Test-Session (Get-SessionCookie $req))) { Send-Json $res 401 ([ordered]@{ error = 'unauthorized' }); return }
     if ($pathname -eq '/api/admin/usage' -and $method -eq 'GET') { Handle-AdminUsage $req $res; return }
+    $art = [regex]::Match($pathname, '^/api/admin/artifacts/([^/]+)$')
+    if ($art.Success -and $method -eq 'GET') { Handle-Artifact $req $res ([System.Uri]::UnescapeDataString($art.Groups[1].Value)); return }
     if ($pathname -eq '/api/admin/editions' -and $method -eq 'GET') { Handle-AdminList $req $res; return }
     if ($pathname -eq '/api/admin/editions' -and $method -eq 'POST') { Handle-AdminCreate $req $res; return }
     $pub = [regex]::Match($pathname, '^/api/admin/editions/([^/]+)/publish$')

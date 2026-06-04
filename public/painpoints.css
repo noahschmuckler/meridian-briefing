@@ -1,0 +1,266 @@
+/* ------------------------------------------------------------------
+   PainPoints — gated internal-artifact viewer. All styling scoped under
+   .painpoints. Palette + serif/monospace voice ported from the source
+   bupe-triage-brief artifact. Carries no content — safe in the public repo.
+   ------------------------------------------------------------------ */
+
+.painpoints {
+  --pp-bg: #0f1a14;
+  --pp-surface: #1a2820;
+  --pp-surface-hover: #223328;
+  --pp-border: #2e4a38;
+  --pp-accent: #4caf7d;
+  --pp-accent-dim: #2d6b48;
+  --pp-accent-bright: #6fcf97;
+  --pp-warn: #e8a838;
+  --pp-danger: #e05c5c;
+  --pp-text: #e8f0eb;
+  --pp-muted: #8ba898;
+  --pp-dim: #506860;
+  --pp-gold: #c9a84c;
+
+  position: relative;
+  min-height: 100vh;
+  background: var(--pp-bg);
+  color: var(--pp-text);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Back-to-meridian pill (sits clear of the meridian chevron slot). */
+.painpoints .pp-back {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  margin: 12px 0 0 16px;
+  padding: 6px 14px 6px 10px;
+  border: 1px solid var(--pp-border);
+  border-radius: 999px;
+  background: var(--pp-surface);
+  color: var(--pp-accent-bright);
+  font-family: monospace;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.painpoints .pp-back:hover { background: var(--pp-surface-hover); transform: translateX(-2px); }
+
+/* Header band */
+.painpoints .pp-header {
+  background: var(--pp-surface);
+  border-bottom: 1px solid var(--pp-border);
+  padding: 16px 32px 20px;
+}
+.painpoints .pp-header-tags {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.painpoints .pp-eyebrow {
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--pp-accent-bright);
+  font-family: monospace;
+  text-transform: uppercase;
+}
+.painpoints .pp-flag {
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--pp-dim);
+  letter-spacing: 0.04em;
+}
+.painpoints .pp-title {
+  font-size: clamp(20px, 4vw, 28px);
+  font-weight: normal;
+  margin: 10px 0 6px;
+  color: var(--pp-text);
+  line-height: 1.2;
+}
+.painpoints .pp-title-accent { color: var(--pp-accent-bright); }
+.painpoints .pp-subtitle {
+  font-size: 14px;
+  color: var(--pp-muted);
+  font-style: italic;
+}
+
+/* Two-column body: sidebar + content */
+.painpoints .pp-body {
+  display: flex;
+  align-items: flex-start;
+}
+.painpoints .pp-sidebar {
+  width: 180px;
+  flex-shrink: 0;
+  background: var(--pp-surface);
+  border-right: 1px solid var(--pp-border);
+  padding: 20px 0;
+  position: sticky;
+  top: 0;
+  align-self: stretch;
+  min-height: calc(100vh - 120px);
+}
+.painpoints .pp-nav {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  padding: 10px 16px;
+  color: var(--pp-muted);
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  transition: all 0.15s;
+}
+.painpoints .pp-nav:hover { color: var(--pp-text); background: rgba(76, 175, 125, 0.08); }
+.painpoints .pp-nav.is-active {
+  background: var(--pp-accent-dim);
+  border-left-color: var(--pp-accent-bright);
+  color: var(--pp-text);
+}
+.painpoints .pp-nav-icon { margin-right: 8px; }
+
+.painpoints .pp-main { flex: 1; padding: 28px 32px; min-width: 0; }
+.painpoints .pp-section-title {
+  font-size: 18px;
+  font-weight: normal;
+  color: var(--pp-accent-bright);
+  margin: 0 0 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--pp-border);
+  letter-spacing: 0.5px;
+}
+
+/* Cards */
+.painpoints .pp-cards { display: flex; flex-direction: column; gap: 14px; }
+.painpoints .pp-card {
+  background: var(--pp-surface);
+  border: 1px solid var(--pp-border);
+  border-radius: 4px;
+  padding: 16px 20px;
+}
+.painpoints .pp-card-title {
+  font-size: 13px;
+  font-family: monospace;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+.painpoints .pp-card-body p { margin: 0 0 10px; }
+.painpoints .pp-card-body p:last-child { margin-bottom: 0; }
+.painpoints .pp-card-body ul { padding-left: 18px; margin: 8px 0 0; line-height: 1.7; }
+.painpoints .pp-card-body li { margin-bottom: 4px; }
+.painpoints .pp-card-body strong { color: var(--pp-text); }
+.painpoints .pp-card-body em { color: var(--pp-accent-bright); font-style: italic; }
+
+/* Accent → title colour */
+.painpoints .pp-danger { color: var(--pp-danger); }
+.painpoints .pp-warn { color: var(--pp-warn); }
+.painpoints .pp-accent { color: var(--pp-accent); }
+.painpoints .pp-accentBright { color: var(--pp-accent-bright); }
+.painpoints .pp-gold { color: var(--pp-gold); }
+.painpoints .pp-muted { color: var(--pp-muted); }
+
+/* Monospace inline blocks used in Resources (phone, url) */
+.painpoints .pp-mono { font-family: monospace; font-size: 13px; margin: 6px 0; }
+
+/* Patient-flow block */
+.painpoints .pp-flow { font-family: monospace; font-size: 12px; color: var(--pp-muted); line-height: 2; }
+.painpoints .pp-flow-i1 { margin-left: 16px; }
+.painpoints .pp-flow-i2 { margin-left: 32px; }
+.painpoints .pp-flow-dim { color: var(--pp-dim); }
+.painpoints .pp-flow-danger { color: var(--pp-danger); margin-top: 4px; }
+
+/* Action Items (todos) */
+.painpoints .pp-todo-filters { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.painpoints .pp-todo-filter {
+  padding: 5px 12px;
+  border: 1px solid var(--pp-border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--pp-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: monospace;
+  letter-spacing: 1px;
+}
+.painpoints .pp-todo-filter.is-active { background: rgba(76, 175, 125, 0.2); border-color: var(--pp-accent); color: var(--pp-accent-bright); }
+.painpoints .pp-todo-filter.is-active.pp-prio-urgent { border-color: var(--pp-danger); color: var(--pp-danger); }
+.painpoints .pp-todo-filter.is-active.pp-prio-high { border-color: var(--pp-warn); color: var(--pp-warn); }
+.painpoints .pp-todo-filter.is-active.pp-prio-lower { border-color: var(--pp-muted); color: var(--pp-muted); }
+
+.painpoints .pp-todo-list { display: flex; flex-direction: column; gap: 10px; }
+.painpoints .pp-todo {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--pp-surface);
+  border: 1px solid var(--pp-border);
+  border-left: 3px solid var(--pp-accent);
+  border-radius: 4px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.painpoints .pp-todo.is-open { background: var(--pp-surface-hover); }
+.painpoints .pp-prio-edge-urgent { border-left-color: var(--pp-danger); }
+.painpoints .pp-prio-edge-high { border-left-color: var(--pp-warn); }
+.painpoints .pp-prio-edge-medium { border-left-color: var(--pp-accent); }
+.painpoints .pp-prio-edge-lower { border-left-color: var(--pp-muted); }
+
+.painpoints .pp-todo-meta {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  min-width: 84px;
+  font-family: monospace;
+}
+.painpoints .pp-todo-prio {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  padding: 2px 5px;
+  border-radius: 2px;
+  border: 1px solid currentColor;
+}
+.painpoints .pp-prio-urgent { color: var(--pp-danger); }
+.painpoints .pp-prio-high { color: var(--pp-warn); }
+.painpoints .pp-prio-medium { color: var(--pp-accent); }
+.painpoints .pp-prio-lower { color: var(--pp-muted); }
+.painpoints .pp-prio-all { color: var(--pp-accent); }
+.painpoints .pp-todo-deadline { font-size: 10px; color: var(--pp-dim); }
+.painpoints .pp-todo-owner { font-size: 10px; color: var(--pp-muted); }
+.painpoints .pp-todo-main { flex: 1; min-width: 0; }
+.painpoints .pp-todo-task { font-size: 14px; color: var(--pp-text); line-height: 1.4; }
+.painpoints .pp-todo-detail { margin-top: 10px; font-size: 13px; color: var(--pp-muted); line-height: 1.6; font-style: italic; }
+.painpoints .pp-todo-caret { color: var(--pp-dim); font-size: 12px; flex-shrink: 0; }
+
+/* Status / empty states */
+.painpoints--status { padding: 0 0 40px; }
+.painpoints--status p { padding: 0 32px; color: var(--pp-muted); }
+.painpoints--status .pp-status-hint { font-size: 12px; color: var(--pp-dim); }
+.painpoints--status a { color: var(--pp-accent-bright); }
+.painpoints--status code { font-family: monospace; color: var(--pp-accent-bright); }
+
+@media (max-width: 640px) {
+  .painpoints .pp-body { flex-direction: column; }
+  .painpoints .pp-sidebar {
+    width: 100%;
+    min-height: 0;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--pp-border);
+    display: flex;
+    flex-wrap: wrap;
+    padding: 8px;
+  }
+  .painpoints .pp-nav { width: auto; border-left: none; border-radius: 4px; }
+}

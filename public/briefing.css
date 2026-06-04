@@ -460,6 +460,8 @@ html, body { margin: 0; padding: 0; }
   cursor: pointer;
 }
 .briefing-app .admin-bar button:hover { background: rgba(255,255,255,0.18); }
+.briefing-app .admin-bar__back { letter-spacing: 0.04em; opacity: 0.85; }
+.briefing-app .admin-bar__back:hover { opacity: 1; }
 /* The select's color:#fff makes native dropdown options white-on-(default light)
    popup -- only the hovered row was legible. Give options an explicit dark popup. */
 .briefing-app .admin-bar select option { color: #fff; background: #1c2742; }
