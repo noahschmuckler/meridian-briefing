@@ -441,7 +441,11 @@ function Add-UsageBucket($map, $key, $ev) {
 }
 
 function Sort-UsageBuckets($map) {
-  return @($map.Values | Sort-Object -Property @{ Expression = { $_['events'] }; Descending = $true }, @{ Expression = { $_['dwell_ms'] }; Descending = $true })
+  # Leading comma so a single-element result is NOT unwrapped to a scalar on
+  # return -- without it, a one-row group (e.g. by_user with a single user)
+  # serializes as a bare object instead of [ {...} ], which crashes the admin
+  # analytics page's .map(). Same idiom as Read-UsageEvents / To-Array.
+  return , @($map.Values | Sort-Object -Property @{ Expression = { $_['events'] }; Descending = $true }, @{ Expression = { $_['dwell_ms'] }; Descending = $true })
 }
 
 function Summarize-Usage($events, [int]$recent) {
@@ -612,6 +616,11 @@ function Send-Bytes($res, [int]$status, [byte[]]$bytes, [string]$contentType, [s
   try {
     $res.StatusCode = $status
     $res.ContentType = $contentType
+    # This server handles one request at a time (the accept loop is serial), so a
+    # kept-alive connection that goes idle/half-dead can stall the next OutputStream
+    # write ("The semaphore timeout period has expired") and freeze the whole site.
+    # Close each connection after its response so idle connections don't accumulate.
+    try { $res.KeepAlive = $false } catch { }
     if ($setCookie) { foreach ($c in $setCookie) { $res.AppendHeader('Set-Cookie', $c) } }
     $res.ContentLength64 = $bytes.Length
     $res.OutputStream.Write($bytes, 0, $bytes.Length)
@@ -936,6 +945,9 @@ $prefix = "http://${prefixHost}:$Port/"
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add($prefix)
+# Single-threaded accept loop: bound how long an idle/stalled connection can sit
+# so it can't wedge the one thread for the default 2-minute window.
+try { $listener.TimeoutManager.IdleConnection = [TimeSpan]::FromSeconds(10) } catch { }
 # Soft Windows auth: challenge ONLY /api/track with Negotiate, so domain machines
 # in the Local-Intranet zone send their identity silently; every other path stays
 # anonymous (the app never prompts and never breaks). If the selector can't be set
