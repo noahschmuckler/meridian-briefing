@@ -117,6 +117,16 @@ Reference for this lifecycle + the PowerShell idioms: `~/GitHub_Repos/throughlin
   landing the briefing's "Meridian Home" footer link now points at (was the
   Cloudflare demo; `normalizeEdition` self-heals the old href on read). The authed
   `/admin` shows the same launcher with an "admin" subtitle + a PainPoints tile.
+- **Clinical Guidelines is a static, ungated, no-build port of the meridian-os clinical
+  modules.** Launcher tile (Mondrian-GUI image) on both `/home` + `/admin` → public `/guidelines`
+  route. The 3 core bubbles (checklist/escalation/FAQ), PREVENT, and the decoration helpers are
+  **rewritten** from meridian-os TSX into Preact+htm under `public/guidelines/` (no signals — one
+  tree, lifted `useState`). Clinical content is identical in both user modes, so it ships as **static
+  `public/guidelines/data/*.json`** fetched at runtime — **no route/store/auth/cookie change, so no
+  Node↔PowerShell lockstep work** (both static handlers already serve `public/` by extension). The
+  JSON is a **read-only copy**; meridian-os remains source-of-truth (re-sync = manual copy). Don't
+  promote this to a gated endpoint or a build step without re-justifying. See BUILDPATH.md for the
+  PR1 (reading)/PR2 (CS tools) split.
 - **Server speaks plain HTTP.** TLS + friendly hostname are Billy's layer (IIS
   reverse-proxy or a firewall'd port). `HOST=0.0.0.0` to expose directly;
   `127.0.0.1` when IIS fronts it. Port is `.env`-driven.
@@ -140,6 +150,14 @@ public/
   painpoints.css     .painpoints viewer styles (dark-green artifact theme)
   favicon.svg        navy/teal/gold mark
   vendor/            preact.module.js, hooks.module.js, htm.module.js (no build step)
+  guidelines.css     Clinical Guidelines styles (clinical glass.css sections, scoped .guidelines-app)
+  guidelines/        Clinical Guidelines app (no-build port of meridian-os clinical modules)
+    app.js           GuidelinesApp: fetch JSON, module-selection grid, 3-bubble detail layout
+    bubbles.js       checklist / escalation / FAQ bubbles + shared row (lifted state, no signals)
+    decorate.js      ref-marker + glossary helpers (port of meridian-os refMarkers.ts + glossary.ts)
+    glossary-popover.js  definition-on-click popover for .glossary-term spans
+    prevent.js       PREVENT 10-yr ASCVD calculator (inline coefficients)
+    data/            clinical-modules.json + glossary.json — static READ-ONLY copies from meridian-os
 scripts/
   seed.mjs           writes one published edition (current TSX content) to state.json — DEV ONLY
   hash-password.mjs  prompt → PBKDF2 → prints ADMIN_PASSWORD_HASH + SALT lines for .env (Node)

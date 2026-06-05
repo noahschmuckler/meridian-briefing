@@ -95,6 +95,29 @@
 .meridian-home__icon--briefing { background: linear-gradient(160deg, #1a2744 0%, #00788a 100%); }
 .meridian-home__icon--painpoints { background: linear-gradient(160deg, #2d6b48 0%, #0f1a14 100%); }
 
+/* Clinical Guidelines reuses the meridian-os "Mondrian GUI" app image: a
+   6-cell Mondrian miniature on a black grid, recreated from glass.css
+   .launcher__mondrian*. White icon base + inset ring to read as an app icon. */
+.meridian-home__icon--guidelines {
+  background: #ffffff;
+  outline: 1px solid rgba(0, 0, 0, 0.06);
+  outline-offset: -1px;
+}
+.meridian-home__mondrian {
+  position: absolute;
+  inset: 0;
+  background: #0f0f0f;
+}
+.meridian-home__mondrian-cell {
+  position: absolute;
+  border: 2px solid #0f0f0f;
+  box-sizing: border-box;
+}
+.meridian-home__mondrian-cell--white { background: #f6f3ec; }
+.meridian-home__mondrian-cell--red { background: #d92e2e; }
+.meridian-home__mondrian-cell--blue { background: #2547a8; }
+.meridian-home__mondrian-cell--yellow { background: #f3c623; }
+
 .meridian-home__glyph {
   font-size: 76px;
   line-height: 1;

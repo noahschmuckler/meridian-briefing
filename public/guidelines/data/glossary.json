@@ -1,0 +1,358 @@
+{
+  "glossary": {
+    "global": [
+      {
+        "term": "PDMP",
+        "expansion": "Prescription Drug Monitoring Program",
+        "aliases": ["PMP"],
+        "definition": "State-run database of dispensed controlled-substance prescriptions. Prescribers query before issuing or refilling Schedule II–V medications to surface concurrent prescribers, early fills, and overdose risk. Many states (e.g. MA, NJ) call theirs the PMP."
+      },
+      {
+        "term": "I-STOP",
+        "expansion": "Internet System for Tracking Over-Prescribing",
+        "definition": "New York's PDMP. Mandatory query before every Schedule II–IV prescription. New Jersey's analog is the NJPMP."
+      },
+      {
+        "term": "NJPMP",
+        "expansion": "New Jersey Prescription Monitoring Program",
+        "definition": "New Jersey's PDMP. Mandatory query at initial prescribing of any controlled substance and at least quarterly during ongoing therapy."
+      },
+      {
+        "term": "MME",
+        "expansion": "Morphine Milligram Equivalents",
+        "aliases": ["MED"],
+        "definition": "Opioid dose normalized to oral morphine. CDC 2022 flags ≥50 MME/day for caution and ≥90 MME/day as high-risk; thresholds inform monitoring, not absolute caps."
+      },
+      {
+        "term": "OUD",
+        "expansion": "Opioid Use Disorder",
+        "definition": "DSM-5 diagnosis. Treated as a chronic medical condition; first-line pharmacotherapy is buprenorphine, methadone, or naltrexone (collectively MOUD)."
+      },
+      {
+        "term": "AUD",
+        "expansion": "Alcohol Use Disorder",
+        "definition": "DSM-5 diagnosis. Pharmacotherapy options include naltrexone, acamprosate, and disulfiram; gabapentin and topiramate are evidence-supported off-label."
+      },
+      {
+        "term": "MOUD",
+        "expansion": "Medications for Opioid Use Disorder",
+        "aliases": ["MAT", "OAT"],
+        "definition": "Buprenorphine, methadone, and naltrexone. Also called Opioid Agonist Therapy (OAT) when restricted to agonists/partial agonists, or Medication-Assisted Treatment (MAT) — the older umbrella term being phased out per SAMHSA guidance. ASAM 2025 and CDC 2022 emphasize that MOUD is not withheld for concurrent benzodiazepine use — co-management is preferred over discontinuation."
+      },
+      {
+        "term": "OTP",
+        "expansion": "Opioid Treatment Program",
+        "definition": "Federally-licensed clinic that dispenses methadone (and increasingly buprenorphine) for OUD. Methadone for OUD must be dispensed via an OTP; buprenorphine can be office-prescribed."
+      },
+      {
+        "term": "CSA",
+        "expansion": "Controlled Substances Act",
+        "definition": "Federal statute (21 USC §801 et seq.) classifying controlled substances into Schedules I–V and setting prescribing rules. Implementing regulations live at 21 CFR §1300 et seq."
+      },
+      {
+        "term": "CFR",
+        "expansion": "Code of Federal Regulations",
+        "definition": "The codified rules of US federal agencies. Controlled-substance prescribing rules live at 21 CFR §1300–1321."
+      },
+      {
+        "term": "USC",
+        "expansion": "United States Code",
+        "definition": "The codified federal statutes. The Controlled Substances Act is codified at 21 USC §801 et seq."
+      },
+      {
+        "term": "DEA",
+        "expansion": "Drug Enforcement Administration",
+        "definition": "Federal agency that registers prescribers and enforces the Controlled Substances Act. DEA registration is required to prescribe Schedule II–V medications."
+      },
+      {
+        "term": "FDA",
+        "expansion": "Food and Drug Administration",
+        "definition": "Federal agency responsible for drug approvals and labeling. The boxed warning (formerly 'black box') is the FDA's strongest labeling caution."
+      },
+      {
+        "term": "CDC",
+        "expansion": "Centers for Disease Control and Prevention",
+        "definition": "US public health agency. Publishes the 2016 / 2022 Clinical Practice Guideline for Prescribing Opioids for Pain."
+      },
+      {
+        "term": "ASAM",
+        "expansion": "American Society of Addiction Medicine",
+        "definition": "US specialty society for addiction medicine. Co-published the 2024–2025 ASAM/ACMT Clinical Practice Guideline on Benzodiazepine Tapering."
+      },
+      {
+        "term": "AAFP",
+        "expansion": "American Academy of Family Physicians",
+        "definition": "US specialty society for family medicine. Frequent source of plain-language clinical reviews cited by primary-care decision support."
+      },
+      {
+        "term": "AACAP",
+        "expansion": "American Academy of Child and Adolescent Psychiatry",
+        "definition": "US specialty society for child and adolescent psychiatry. Authors the youth ADHD and SUD practice parameters."
+      },
+      {
+        "term": "AAAP",
+        "expansion": "American Academy of Addiction Psychiatry",
+        "definition": "US specialty society for addiction psychiatry. Frequent co-author with ASAM on opioid, benzodiazepine, and SUD guidelines."
+      },
+      {
+        "term": "AAP",
+        "expansion": "American Academy of Pediatrics",
+        "definition": "US specialty society for pediatrics. Co-authors pediatric ADHD guidance with AACAP and places ADHD titration squarely in primary-care scope."
+      },
+      {
+        "term": "AGS",
+        "expansion": "American Geriatrics Society",
+        "definition": "US specialty society for geriatrics. Publishes the Beers Criteria for potentially inappropriate medications in older adults (2023 update)."
+      },
+      {
+        "term": "AAN",
+        "expansion": "American Academy of Neurology",
+        "definition": "US specialty society for neurology. Authors the practice guidelines on mild cognitive impairment (MCI)."
+      },
+      {
+        "term": "USPSTF",
+        "expansion": "US Preventive Services Task Force",
+        "definition": "Federal panel that grades evidence for preventive services. Recommendations carry letter grades A–D and 'I' for insufficient."
+      },
+      {
+        "term": "NICE",
+        "expansion": "National Institute for Health and Care Excellence",
+        "definition": "UK clinical guideline body. Often referenced for ADHD and chronic-pain pathways where US guidance is less specific."
+      },
+      {
+        "term": "VA-DoD",
+        "expansion": "Veterans Affairs / Department of Defense",
+        "aliases": ["VA/DoD"],
+        "definition": "Joint US clinical practice guideline series. Authoritative on opioid therapy, benzodiazepines, SUD, and chronic pain."
+      },
+      {
+        "term": "ADHD",
+        "expansion": "Attention-Deficit/Hyperactivity Disorder",
+        "definition": "DSM-5 neurodevelopmental disorder. First-line pharmacotherapy in adults and adolescents is stimulants (methylphenidate or amphetamine class)."
+      },
+      {
+        "term": "GAD",
+        "expansion": "Generalized Anxiety Disorder",
+        "definition": "DSM-5 anxiety disorder. First-line pharmacotherapy is SSRI/SNRI; benzodiazepines are second-line and not for chronic monotherapy."
+      },
+      {
+        "term": "MCI",
+        "expansion": "Mild Cognitive Impairment",
+        "definition": "Cognitive decline beyond expected aging without dementia-level functional impairment. Per AAN, benzodiazepines and other anticholinergic / sedating agents should be deprescribed where possible."
+      },
+      {
+        "term": "RBD",
+        "expansion": "REM sleep Behavior Disorder",
+        "definition": "Parasomnia involving dream enactment. One of the named exceptions where chronic clonazepam may be appropriate despite the Beers Criteria."
+      },
+      {
+        "term": "PTSD",
+        "expansion": "Post-Traumatic Stress Disorder",
+        "definition": "DSM-5 trauma- and stressor-related disorder. Benzodiazepines are not recommended for PTSD per VA-DoD; first-line is trauma-focused psychotherapy plus SSRI/SNRI."
+      },
+      {
+        "term": "OCD",
+        "expansion": "Obsessive-Compulsive Disorder",
+        "definition": "DSM-5 anxiety-spectrum disorder. First-line pharmacotherapy is SSRI at higher doses; benzodiazepines are not effective monotherapy."
+      },
+      {
+        "term": "SSRI",
+        "expansion": "Selective Serotonin Reuptake Inhibitor",
+        "definition": "Class of antidepressants (sertraline, escitalopram, fluoxetine, paroxetine, citalopram). First-line for most depressive and anxiety disorders."
+      },
+      {
+        "term": "SNRI",
+        "expansion": "Serotonin-Norepinephrine Reuptake Inhibitor",
+        "definition": "Class of antidepressants (venlafaxine, duloxetine, desvenlafaxine). First-line alongside SSRIs for depression, GAD, and some chronic pain conditions."
+      },
+      {
+        "term": "MAOI",
+        "expansion": "Monoamine Oxidase Inhibitor",
+        "definition": "Older antidepressant class. Rarely used in primary care due to dietary tyramine restrictions and serotonin-syndrome risk with serotonergic agents."
+      },
+      {
+        "term": "CIWA-Ar",
+        "expansion": "Clinical Institute Withdrawal Assessment for Alcohol — Revised",
+        "definition": "10-item scored scale for alcohol withdrawal severity. Drives symptom-triggered benzodiazepine dosing during inpatient detox."
+      },
+      {
+        "term": "COWS",
+        "expansion": "Clinical Opiate Withdrawal Scale",
+        "definition": "11-item scored scale for opioid withdrawal severity. Score ≥8 generally signals readiness for buprenorphine induction."
+      },
+      {
+        "term": "AUDIT-C",
+        "expansion": "Alcohol Use Disorders Identification Test — Concise",
+        "definition": "3-question screen for unhealthy alcohol use. Positive thresholds: ≥4 in men, ≥3 in women."
+      },
+      {
+        "term": "GAD-7",
+        "expansion": "Generalized Anxiety Disorder 7-item scale",
+        "definition": "Self-report screen and severity measure for GAD. Cutoffs: 5 mild, 10 moderate, 15 severe."
+      },
+      {
+        "term": "PHQ-9",
+        "expansion": "Patient Health Questionnaire 9-item depression scale",
+        "definition": "Self-report screen and severity measure for major depression. Score ≥10 supports a depression diagnosis pending clinical interview."
+      },
+      {
+        "term": "PCP",
+        "expansion": "Primary Care Provider",
+        "definition": "The patient's principal clinician — typically family medicine, internal medicine, or pediatrics. PCP and PCC are used interchangeably in some institutional documents."
+      },
+      {
+        "term": "Beers Criteria",
+        "expansion": "AGS Beers Criteria",
+        "aliases": ["Beers"],
+        "definition": "AGS list of potentially inappropriate medications in adults ≥65. 2023 update flags benzodiazepines as a general avoid with named exceptions (seizure, RBD, catatonia, treatment-resistant GAD, palliative)."
+      },
+      {
+        "term": "SUD",
+        "expansion": "Substance Use Disorder",
+        "definition": "DSM-5 diagnostic category covering disordered use of alcohol, opioids, stimulants, cannabis, sedatives, and other substances. Severity is graded mild / moderate / severe by criterion count."
+      },
+      {
+        "term": "CUD",
+        "expansion": "Cannabis Use Disorder",
+        "definition": "DSM-5 diagnosis for problematic cannabis use. No FDA-approved pharmacotherapy; behavioral therapy (CBT, motivational enhancement) is first-line."
+      },
+      {
+        "term": "PBM",
+        "expansion": "Pharmacy Benefit Manager",
+        "definition": "Third-party administrator (CVS Caremark, Express Scripts, OptumRx) that sets formularies, fill quantities, and early-fill thresholds for insured prescriptions. PBM thresholds are operational, not clinical guidelines."
+      },
+      {
+        "term": "SAMHSA",
+        "expansion": "Substance Abuse and Mental Health Services Administration",
+        "definition": "US federal agency that regulates Opioid Treatment Programs and publishes the TIP and TAP series of clinical guidance for SUD treatment."
+      },
+      {
+        "term": "ASRS",
+        "expansion": "Adult ADHD Self-Report Scale",
+        "definition": "18-item self-report screen for adult ADHD. The 6-item Part A is widely used as the screen — score ≥4 suggests further evaluation. Distinct from ADHD-RS (clinician-rated)."
+      },
+      {
+        "term": "ADHD-RS",
+        "expansion": "ADHD Rating Scale",
+        "definition": "Clinician-rated 18-item severity scale based on DSM criteria. Used in trials to track response. Distinct from the ASRS (self-report) and from the ADHD diagnosis itself."
+      },
+      {
+        "term": "ED95",
+        "expansion": "Effective Dose 95%",
+        "definition": "Dose at which 95% of subjects achieve the intended pharmacologic effect. Cited in stimulant titration and benzodiazepine equivalence work."
+      },
+      {
+        "term": "OR",
+        "expansion": "Odds Ratio",
+        "definition": "Effect-size measure from logistic regression and case-control studies. OR=1 means no association; OR>1 means the exposure increases the odds of the outcome."
+      },
+      {
+        "term": "AOR",
+        "expansion": "Adjusted Odds Ratio",
+        "aliases": ["aOR"],
+        "definition": "Odds ratio after adjustment for confounding variables in a regression model. Often written aOR in primary literature."
+      },
+      {
+        "term": "AHR",
+        "expansion": "Adjusted Hazard Ratio",
+        "aliases": ["aHR"],
+        "definition": "Effect-size measure from Cox proportional-hazards survival models, after adjustment for confounders. Often written aHR in primary literature."
+      },
+      {
+        "term": "RCT",
+        "expansion": "Randomized Controlled Trial",
+        "definition": "Study design where subjects are randomly assigned to intervention or control. Highest level of evidence for efficacy questions."
+      },
+      {
+        "term": "AHA/ACC",
+        "expansion": "American Heart Association / American College of Cardiology",
+        "definition": "Joint authors of the cholesterol, hypertension, and ASCVD prevention guidelines used in primary care."
+      },
+      {
+        "term": "APA",
+        "expansion": "American Psychiatric Association",
+        "definition": "US specialty society for psychiatry. Publishes the DSM (Diagnostic and Statistical Manual) and clinical practice guidelines."
+      },
+      {
+        "term": "APS/AAPM",
+        "expansion": "American Pain Society / American Academy of Pain Medicine",
+        "definition": "Joint authors of the 2009 opioid-prescribing guideline for chronic non-cancer pain (since superseded by CDC 2016 / 2022)."
+      },
+      {
+        "term": "ACOEM",
+        "expansion": "American College of Occupational and Environmental Medicine",
+        "definition": "US specialty society for occupational and environmental medicine. Publishes return-to-work guidance for opioid- and benzodiazepine-related impairment."
+      },
+      {
+        "term": "HIVMA/IDSA",
+        "expansion": "HIV Medicine Association / Infectious Diseases Society of America",
+        "definition": "Joint authors of clinical guidance on opioid prescribing and SUD management in patients with HIV."
+      },
+      {
+        "term": "OTA",
+        "expansion": "Opioid Treatment Agreement",
+        "definition": "Patient–prescriber written contract covering controlled-substance prescribing rules — single prescriber, single pharmacy, UDS expectations, early-refill policy. Documents informed consent without limiting clinical judgment."
+      },
+      {
+        "term": "POC",
+        "expansion": "Point of Care",
+        "definition": "Bedside or in-office testing (POC urine drug screen, POC ultrasound) as opposed to send-out lab work. POC immunoassay UDS panels need confirmatory testing for clinical decisions."
+      },
+      {
+        "term": "GC-MS",
+        "expansion": "Gas Chromatography–Mass Spectrometry",
+        "definition": "Confirmatory lab method for urine drug testing. Resolves false positives from immunoassay panels; older platform now largely replaced by LC-MS/MS."
+      },
+      {
+        "term": "LC-MS/MS",
+        "expansion": "Liquid Chromatography–Tandem Mass Spectrometry",
+        "definition": "Modern confirmatory urine drug testing platform. More sensitive than GC-MS for many compounds and the standard for low-cutoff confirmatory testing."
+      },
+      {
+        "term": "TAPS",
+        "expansion": "Tobacco, Alcohol, Prescription medication, and other Substance use",
+        "definition": "NIDA's two-stage SUD screening tool used in primary care. TAPS-1 is the brief screen; TAPS-2 follows up positives with substance-specific questions."
+      },
+      {
+        "term": "DAST",
+        "expansion": "Drug Abuse Screening Test",
+        "definition": "10-item self-report screen for non-alcohol drug use. Positive at score ≥3."
+      },
+      {
+        "term": "NIDA",
+        "expansion": "National Institute on Drug Abuse",
+        "definition": "NIH institute for substance use research. Publishes the TAPS screen, the NIDA Quick Screen, and clinical reviews."
+      },
+      {
+        "term": "Z-drug",
+        "expansion": "Non-benzodiazepine sedative-hypnotic",
+        "definition": "Zolpidem, zaleplon, and eszopiclone. Bind the same GABA-A receptor site as benzodiazepines and share many of the same Beers concerns, falls risk, and complex sleep behaviors."
+      },
+      {
+        "term": "ACMT",
+        "expansion": "American College of Medical Toxicology",
+        "definition": "US specialty society for medical toxicology. Co-author with ASAM on the 2024–2025 benzodiazepine tapering guideline."
+      },
+      {
+        "term": "SDLP",
+        "expansion": "Standard Deviation of Lateral Position",
+        "definition": "Driving-simulator and on-road measure of lane weaving. Primary outcome in benzodiazepine and Z-drug driving-impairment studies; equivalent to a 0.05% blood-alcohol effect at threshold."
+      },
+      {
+        "term": "FMCSA",
+        "expansion": "Federal Motor Carrier Safety Administration",
+        "definition": "US DOT agency that regulates commercial driving. Disqualifies CDL holders for many controlled-substance prescriptions; relevant to occupational return-to-work decisions for opioid- and benzodiazepine-treated patients."
+      },
+      {
+        "term": "PEG",
+        "expansion": "Pain · Enjoyment · General activity",
+        "definition": "3-item pain scale (each 0–10) tracking chronic pain severity, enjoyment-of-life impact, and general-activity impact. Used for primary-care follow-up; sensitive to change."
+      },
+      {
+        "term": "ADLs",
+        "expansion": "Activities of Daily Living",
+        "definition": "Functional assessment domain (bathing, dressing, eating, transferring, toileting, continence). Used in geriatric assessment and trials of cognition or sedating medications."
+      }
+    ]
+  }
+}
