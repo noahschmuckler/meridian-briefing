@@ -26,6 +26,17 @@ const DRAFT_IDS = new Set(['anemia', 'abd-pain', 'ckd']);
 // Modules whose default view includes the PREVENT calculator panel.
 const PREVENT_MODULES = new Set(['lipid-management']);
 
+// Selection-card order. The grid flows column-first over 3 rows (see
+// guidelines.css), so this array lays out as: left column = the three
+// inherited-patient controlled-substance modules, grouped; top-middle =
+// lipid; the remaining three (ckd / anemia / abd-pain) fill the rest in no
+// particular order. Ids not listed sort to the end.
+const MODULE_ORDER = ['adhd', 'opiates', 'benzos', 'lipid-management', 'ckd', 'anemia', 'abd-pain'];
+function moduleOrder(id) {
+  const i = MODULE_ORDER.indexOf(id);
+  return i === -1 ? MODULE_ORDER.length : i;
+}
+
 function go(path) { window.location.assign(path); }
 
 function backToHome() {
@@ -132,7 +143,7 @@ function Selection({ modules, onOpen }) {
     <div class="guidelines-select">
       <div class="guidelines-select__intro">Select a clinical module.</div>
       <div class="guidelines-select__grid">
-        ${modules.map((m) => html`<button key=${m.module_id} type="button" class="guidelines-card" onClick=${() => onOpen(m.module_id)}>
+        ${[...modules].sort((a, b) => moduleOrder(a.module_id) - moduleOrder(b.module_id)).map((m) => html`<button key=${m.module_id} type="button" class="guidelines-card" onClick=${() => onOpen(m.module_id)}>
           <div class="guidelines-card__head">
             <span class="guidelines-card__title">${m.default_title}</span>
             ${DRAFT_IDS.has(m.module_id) && html`<span class="guidelines-draft-badge">Draft</span>`}
