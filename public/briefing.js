@@ -868,6 +868,19 @@ const GUIDELINES_TILE = {
   onClick: () => go('/guidelines'),
 };
 
+// Admin-only. Opens the static Throughline onboarding page (download the
+// installer + setup steps). This site is purely a distributor — no Throughline
+// code runs on this server; the app runs locally on the user's own device.
+const THROUGHLINE_TILE = {
+  label: 'Throughline',
+  variant: 'throughline',
+  glyph: '🧵',
+  // Explicit index.html — the static handlers serve files by extension but do not
+  // resolve a bare directory to index.html (and adding that would touch both
+  // server.js + server.ps1). Linking the file directly keeps this zero-lockstep.
+  onClick: () => go('/throughline/index.html'),
+};
+
 // Public launcher (/home): one tile back to the provider briefing.
 function PublicHome() {
   return html`<${MeridianLauncher}
@@ -887,6 +900,7 @@ function AdminHome({ onLogout }) {
       { label: 'Provider Briefing', glyph: '📅', variant: 'briefing', onClick: () => go('/admin/edit') },
       GUIDELINES_TILE,
       { label: 'PainPoints', glyph: '⚠️', variant: 'painpoints', onClick: () => go('/admin/painpoints') },
+      THROUGHLINE_TILE,
     ]}
   />`;
 }

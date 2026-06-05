@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Install Throughline</title>
+<link rel="icon" href="/favicon.svg" />
+<style>
+  :root {
+    --navy: #1a2744; --teal: #00788a; --thread: #14b8a6;
+    --paper: #f6f3ec; --ink: #1f2733; --soft: #5b6675; --edge: #e2ddd1;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: 'DM Sans', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    line-height: 1.55;
+  }
+  .topbar {
+    background: var(--navy); color: #fff; padding: 14px 28px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .wordmark {
+    background: linear-gradient(160deg, #115e59 0%, #2dd4bf 100%);
+    color: #022; font-weight: 700; letter-spacing: 0.04em;
+    padding: 4px 12px; border-radius: 999px; font-size: 0.82rem; text-transform: uppercase;
+  }
+  .topbar a { color: rgba(255,255,255,0.7); text-decoration: none; font-size: 0.85rem; margin-left: auto; }
+  .wrap { max-width: 720px; margin: 32px auto; padding: 0 24px; }
+  h1 { font-family: 'DM Serif Display', Georgia, serif; font-size: 2rem; margin: 0 0 6px; color: var(--navy); }
+  .lead { color: var(--soft); margin: 0 0 8px; }
+  .version { color: var(--soft); font-size: 0.85rem; margin: 0 0 24px; }
+  .version code { background: #fff; border: 1px solid var(--edge); border-radius: 5px; padding: 1px 6px; }
+  .step { background: #fff; border: 1px solid var(--edge); border-radius: 12px; padding: 18px 20px; margin: 0 0 16px; }
+  .step h2 { margin: 0 0 8px; font-size: 1.05rem; color: var(--navy); display: flex; align-items: baseline; gap: 8px; }
+  .step h2 .n {
+    background: var(--teal); color: #fff; border-radius: 50%; width: 24px; height: 24px;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; flex: none;
+  }
+  .step p { margin: 6px 0; color: var(--ink); }
+  .btn-dl {
+    display: inline-block; background: var(--navy); color: #fff; text-decoration: none;
+    padding: 11px 20px; border-radius: 9px; font-weight: 600; margin-top: 4px;
+  }
+  .btn-dl:hover { background: #24355c; }
+  .codeblock { position: relative; margin: 10px 0 2px; }
+  pre {
+    background: #0f1a2b; color: #e8eef6; border-radius: 9px; padding: 14px 16px; overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; margin: 0;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .copy {
+    position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.12); color: #fff;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 3px 10px; font-size: 0.75rem; cursor: pointer;
+  }
+  .copy:hover { background: rgba(255,255,255,0.22); }
+  .note { font-size: 0.85rem; color: var(--soft); }
+  .note strong { color: var(--ink); }
+  kbd { background: #fff; border: 1px solid var(--edge); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; font-size: 0.82rem; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="wordmark">Throughline</span>
+    <a href="/admin">← Meridian admin</a>
+  </div>
+  <div class="wrap">
+    <h1>Install Throughline</h1>
+    <p class="lead">Throughline runs locally on your own device. This sets it up in a few minutes — no GitHub, no typing file paths.</p>
+    <p class="version">Current version: <code id="ver">latest</code> <span id="dt"></span></p>
+
+    <div class="step">
+      <h2><span class="n">1</span> Download the installer</h2>
+      <p>One small file. Your browser may warn about it — that's expected; it's a setup script.</p>
+      <a class="btn-dl" id="dl" href="./install-throughline.ps1.txt" download>⤓ Download installer</a>
+    </div>
+
+    <div class="step">
+      <h2><span class="n">2</span> Open PowerShell</h2>
+      <p>Press <kbd>⊞ Start</kbd>, type <strong>PowerShell</strong>, and press <kbd>Enter</kbd>. A blue window opens.</p>
+    </div>
+
+    <div class="step">
+      <h2><span class="n">3</span> Paste this one line and press Enter</h2>
+      <p>It tidies up the downloaded file and runs the installer. (Windows hides the <code>.txt</code> on the download — this handles the rename for you.)</p>
+      <div class="codeblock">
+        <button class="copy" data-copy="run">Copy</button>
+        <pre id="run">$d="$env:USERPROFILE\throughline-deploy"; New-Item -ItemType Directory -Force $d | Out-Null; Move-Item -Force "$env:USERPROFILE\Downloads\install-throughline.ps1.txt" "$d\install-throughline.ps1"; Unblock-File "$d\install-throughline.ps1"; powershell -ExecutionPolicy Bypass -File "$d\install-throughline.ps1"</pre>
+      </div>
+    </div>
+
+    <div class="step">
+      <h2><span class="n">4</span> Pick your shared folder</h2>
+      <p>A browser tab opens to a setup screen. Choose your shared OneDrive folder (under <strong>OneDrive&nbsp;-&nbsp;…</strong>) — the one shared with your dyad partner. That's it. Throughline only reads those files; it never changes them.</p>
+    </div>
+
+    <p class="note"><strong>Updating later:</strong> come back here, download again, and re-run the same one line. It updates in place and keeps your settings. &nbsp;·&nbsp; <strong>Need Node?</strong> Install it once from the company app store first.</p>
+  </div>
+
+  <script>
+    // Populate version/date from the published manifest (best-effort).
+    fetch('./throughline-release.json', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((m) => {
+        if (!m) return;
+        if (m.version) document.getElementById('ver').textContent = m.version + (m.sha ? ' (' + m.sha + ')' : '');
+        if (m.date) document.getElementById('dt').textContent = '· published ' + m.date;
+      })
+      .catch(() => {});
+    // Copy buttons.
+    document.querySelectorAll('.copy').forEach((b) => {
+      b.addEventListener('click', () => {
+        const el = document.getElementById(b.dataset.copy);
+        navigator.clipboard.writeText(el.textContent).then(() => {
+          const t = b.textContent; b.textContent = 'Copied ✓';
+          setTimeout(() => { b.textContent = t; }, 1500);
+        });
+      });
+    });
+  </script>
+</body>
+</html>

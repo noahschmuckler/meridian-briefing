@@ -94,6 +94,7 @@
 
 .meridian-home__icon--briefing { background: linear-gradient(160deg, #1a2744 0%, #00788a 100%); }
 .meridian-home__icon--painpoints { background: linear-gradient(160deg, #2d6b48 0%, #0f1a14 100%); }
+.meridian-home__icon--throughline { background: linear-gradient(160deg, #115e59 0%, #2dd4bf 100%); }
 
 /* Clinical Guidelines reuses the meridian-os "Mondrian GUI" app image: a
    6-cell Mondrian miniature on a black grid, recreated from glass.css
