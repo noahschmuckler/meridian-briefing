@@ -4,43 +4,76 @@ High-density status for picking up work in a fresh session. Pairs with CLAUDE.md
 (conventions/locked decisions) and `~/.claude/plans/meridian-briefing-v1.md`
 (original plan).
 
-## 🔧 IN FLIGHT (2026-06-04): Clinical Guidelines app (port from meridian-os) — branch `noah/clinical-guidelines-port`
+## ⚠️ HEADS-UP (concurrent session): "throughline" is being added to the meridian homepage
+
+Noah is, in a separate session, bringing a program called **throughline** onto the meridian home
+screen of *this* repo. Expect new code on `main` next session — most likely a new launcher tile in
+`public/briefing.js` (`PublicHome` / `AdminHome` / `MeridianLauncher`) plus `public/home.css` icon
+styles, and possibly a new route + `public/throughline*` assets. **Before starting Clinical Guidelines
+PR2, `git pull` and re-read `briefing.js` + `home.css`** — the PR2 toolbar work doesn't touch the home
+tiles, but the launcher files are the likely overlap point, so rebase cleanly and don't clobber the
+throughline tile.
+
+## 🚢 SHIPPED + ON MAIN (2026-06-05): Clinical Guidelines app — PR1 (reading experience)
+
+PR #7 (`noah/clinical-guidelines-port`) **squash-merged to `main` → `a465a88`** (branch deleted). Not
+yet pulled to the live CR DEV box at the time of writing — a `git pull` + browser refresh on the box
+surfaces it (static assets only; no task restart needed). Plan: `~/.claude/plans/twinkly-roaming-mitten.md`.
 
 New **"Clinical Guidelines"** launcher tile on the meridian home (identical on public `/home` + authed
 `/admin`), using the meridian-os "Mondrian GUI" app image (6-cell Mondrian miniature). Tile → public
 `/guidelines` route → flat selection of all 7 clinical modules (no gallery/topic/archive) → 3-bubble
-reading view (green checklist / red escalation / blue detail). Plan:
-`~/.claude/plans/twinkly-roaming-mitten.md`. Phased delivery.
+reading view (green checklist / red escalation / blue detail).
 
-**PR1 (this branch) — reading experience. DONE + headless-verified, pending PR/merge.**
-- Ported from meridian-os TSX into the briefing's no-build Preact+htm idiom (no signals — one
-  component tree, lifted `useState` for selected-module + focused-FAQ). New files under
+- Ported from meridian-os TSX into the briefing's no-build Preact+htm idiom (**no signals** — one
+  component tree, lifted `useState` for selected-module + focused-FAQ). Files under
   `public/guidelines/`: `app.js` (GuidelinesApp: selection grid + detail layout), `bubbles.js`
   (checklist/escalation/FAQ + shared row), `decorate.js` (refMarkers + glossary helpers, port of
   meridian-os `src/lib/refMarkers.ts` + `glossary.ts`), `glossary-popover.js`, `prevent.js`
-  (PREVENT calc, inline coefficients). New `public/guidelines.css` (clinical glass.css sections,
+  (PREVENT calc, inline coefficients). `public/guidelines.css` (clinical glass.css sections,
   scoped under `.guidelines-app`). Wired in `public/briefing.js` (Mondrian tile + `/guidelines`
   route), `public/home.css` (Mondrian icon), `public/index.html` (css link).
-- **Full fidelity FAQ:** ref-marker superscripts + numbered citation list, glossary decoration +
+- **Full-fidelity FAQ:** ref-marker superscripts + numbered citation list, glossary decoration +
   click popover, SmartPhrase-note pills (inline expand/copy), consult-decision-point pills, green-zone
   SmartPhrase copy chip. Drafts (`anemia`/`abd-pain`/`ckd`) get a Draft badge; lipid shows PREVENT
   as a 4th default panel.
-- **Data is static public content** (clinical content is the same in both user modes): copied verbatim
-  to `public/guidelines/data/{clinical-modules.json,glossary.json}` and `fetch()`ed at runtime. **No
-  server/route/store/auth change → no Node↔PowerShell lockstep work** (both `Send-Static`/static
-  handlers already serve `public/` by extension incl. `.json`). meridian-os stays source-of-truth;
-  re-sync is a manual file copy if modules are rewritten.
-- **Verified:** `npm test` 46/46 green; dev server (`:8799`) serves `/guidelines` (shell) + all new
-  assets with correct MIME; headless Chrome (Playwright) confirms 7 cards / 3 draft badges, opiates
-  3 bubbles (4 checklist + 6 escalation rows), row-click focuses FAQ with 8 ref-markers / 6 citations
-  / 2 sub-questions / 6 glossary terms + working popover, lipid PREVENT computes 3.8%, lipid VHR
-  SmartPhrase pill expands, green-zone `.lipidreview` chip — zero console errors.
+- **Selection order** is deliberate (column-first grid, 3 rows; `MODULE_ORDER` in `app.js`): left
+  column = the 3 inherited-patient CS modules (adhd/opiates/benzos) grouped, top-middle = lipid,
+  remaining three (ckd/anemia/abd-pain) fill the rest; single-column stack on narrow screens.
+- **Data is static public content** (same in both user modes): `public/guidelines/data/{clinical-modules,glossary}.json`
+  copied verbatim, `fetch()`ed at runtime. **No server/route/store/auth change → no Node↔PowerShell
+  lockstep work** (both static handlers already serve `public/` by extension incl. `.json`).
+  meridian-os stays source-of-truth; re-sync = manual file copy if modules are rewritten.
+- **Verified:** `npm test` 46/46; headless Chrome confirmed 7 cards / 3 draft badges, opiates 3 bubbles
+  (4 checklist + 6 escalation rows), row-click focuses FAQ (8 ref-markers / 6 citations / 2 sub-Qs /
+  6 glossary terms + popover), lipid PREVENT computes 3.8%, SmartPhrase surfaces expand, deliberate
+  column order — zero console errors.
 
-**PR2 (next, branch `noah/clinical-guidelines-tools`):** the three interactive CS tools as right-side
-panels via a per-module header toolbar (Consults / CS Agreement / SmartPhrases — adhd/opiates/benzos;
-SmartPhrases also lipid), ported from meridian-os `consult-builder` / `contract-builder` /
-`smartphrase-selector`; adds `controlled-substances-contracts.json` to `public/guidelines/data/` and
-consult-mention decoration to `decorate.js`. Clipboard is the output path (no `meridian:spawn-bubble`).
+### ▶ NEXT — Clinical Guidelines PR2 (deferred 2026-06-05 per Noah; likely the next session's first task)
+
+Goal: bring the three interactive controlled-substance tools into the module detail view as **right-side
+panels** opened from a **per-module header toolbar**. Full design already in the plan file
+(`~/.claude/plans/twinkly-roaming-mitten.md`, "PR2" + "Per-module tool matrix"). Resume recipe:
+
+1. `git pull` main (pick up throughline — see heads-up above); branch `noah/clinical-guidelines-tools`.
+2. Copy `~/GitHub_Repos/meridian-os/src/data/seed/controlled-substances-contracts.json` →
+   `public/guidelines/data/` (root-anchored `/data/` gitignore does **not** catch this path).
+3. New `public/guidelines/tools.js`: port `ConsultBuilder` / `ContractBuilder` / `SmartphraseSelector`
+   from meridian-os `src/bubbles/{consult-builder,contract-builder,smartphrase-selector}/index.tsx`
+   (~660/669/201 lines) to Preact+htm. State via `useState`; **drop** the `meridian:spawn-bubble` /
+   OpenEvidence dispatch — clipboard copy is the output path.
+4. Add a header toolbar in `app.js` module detail: buttons shown per the **tool matrix** — Consults +
+   CS Agreement + SmartPhrases for adhd/opiates/benzos; SmartPhrases-only for lipid; none for the 3
+   drafts. Clicking a button mounts the tool in a right-side panel slot (reuse `.cm-layout__panel`;
+   lipid already uses it for PREVENT — allow a panel switcher or a 4th column). `module_class_map`
+   (stimulant/opioid/benzo) lives in the contracts JSON.
+5. Add `decorateConsultMentionsHtml` to `decorate.js` (port meridian-os `src/lib/consultDecorator.ts`)
+   and append it to the FAQ decorate chain in `bubbles.js`; wire `.consult-link` clicks + the FAQ
+   consult-decision pill + green-zone "All SmartPhrases →" launch to open the relevant tool panel.
+6. Re-verify headless (toolbar visibility per module, each tool renders + copies) + `npm test`.
+
+The broader intent Noah flagged for the fresh session: **SmartPhrases + other module enhancements** —
+PR2 above is the concrete entry point.
 
 ## 🚢 SHIPPED + LIVE (2026-06-04): usage analytics fixed · home launcher · PainPoints artifact area
 
