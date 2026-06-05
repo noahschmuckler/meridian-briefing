@@ -1,4 +1,4 @@
-﻿# Throughline orange-device installer (20260605T162615Z)
+﻿# Throughline orange-device installer (20260605T162823Z)
 # A SELF-DOWNLOADING bootstrapper: the user downloads only THIS file (as
 # install-throughline.ps1.txt → rename to .ps1), and it fetches the code bundle
 # from the meridian-briefing distributor at run time. The zip never passes
@@ -31,7 +31,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$Sha      = "20260605T162615Z"
+$Sha      = "20260605T162823Z"
 $AppName  = "throughline"
 $TaskName = "ThroughlineServer"
 $Port     = 8787
